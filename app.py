@@ -30,6 +30,16 @@ def compute_difference(img1, img2):
     return diff, thresh
 
 def apply_image_subtraction(img1, img2):
+    # Ensure images are the same size
+    img1 = cv2.resize(img1, (img2.shape[1], img2.shape[0]))
+
+    # Convert images to the same number of channels (if necessary)
+    if len(img1.shape) != len(img2.shape):
+        if len(img1.shape) == 2:  # img1 is grayscale
+            img1 = cv2.cvtColor(img1, cv2.COLOR_GRAY2RGB)
+        if len(img2.shape) == 2:  # img2 is grayscale
+            img2 = cv2.cvtColor(img2, cv2.COLOR_GRAY2RGB)
+    
     # Convert to float32 for subtraction
     f_img1 = img1.astype(np.float32)
     f_img2 = img2.astype(np.float32)
