@@ -88,18 +88,18 @@ def main():
             
             if method == "Basic Difference":
                 diff, thresh = compute_difference(img1, img2)
-                st.image(diff, caption="Difference Map", use_column_width=True)
-                st.image(thresh, caption="Thresholded Changes", use_column_width=True)
+                st.image(diff, caption="Difference Map", use_container_width=True)
+                st.image(thresh, caption="Thresholded Changes", use_container_width=True)
                 
             elif method == "Image Subtraction":
                 subtracted = apply_image_subtraction(img1, img2)
-                st.image(subtracted, caption="Subtraction Result", use_column_width=True)
+                st.image(subtracted, caption="Subtraction Result", use_container_width=True)
                 
             elif method == "Threshold Detection":
                 sensitivity = st.slider("Detection Sensitivity", 10, 100, 30)
                 diff, thresh = compute_difference(img1, img2)
                 _, thresh = cv2.threshold(diff, sensitivity, 255, cv2.THRESH_BINARY)
-                st.image(thresh, caption="Threshold Detection Result", use_column_width=True)
+                st.image(thresh, caption="Threshold Detection Result", use_container_width=True)
         
         with tab3:
             st.subheader("Advanced Analysis")
@@ -110,7 +110,7 @@ def main():
                 if enhance:
                     diff, _ = compute_difference(img1, img2)
                     edges = cv2.Canny(diff, 100, 200)
-                    st.image(edges, caption="Edge Detection", use_column_width=True)
+                    st.image(edges, caption="Edge Detection", use_container_width=True)
             
             with col2:
                 contour = st.checkbox("Show Change Contours")
@@ -119,7 +119,7 @@ def main():
                     contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
                     result = img2.copy()
                     cv2.drawContours(result, contours, -1, (0, 255, 0), 2)
-                    st.image(result, caption="Change Contours", use_column_width=True)
+                    st.image(result, caption="Change Contours", use_container_width=True)
 
 if __name__ == "__main__":
     main()
