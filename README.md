@@ -1,129 +1,118 @@
 # TSCM Change Detection Analysis Tool
 
-## Overview
+A Streamlit web application for Technical Surveillance Countermeasures (TSCM) professionals to detect and analyze changes between two images. Upload a Before and After photo to identify potential modifications or anomalies in a surveillance area.
 
-This application is designed for Technical Surveillance Countermeasures (TSCM) professionals to analyze and detect changes between two images. It provides multiple analysis methods and visualization tools to identify potential modifications or anomalies in surveillance areas.
+![Upload Screen](./img/main1.png)
 
-![highlight](./img/img-highlight.png)
+![Analysis Results](./img/main2.png)
+
+
 
 ## Installation
 
-### Prerequisites
-- Python 3.8 or higher
-- pip package manager
+**Prerequisites:** Python 3.8+
 
-### Required Packages
-```bash
-pip install streamlit opencv-python numpy Pillow streamlit-image-comparison==0.0.4
-```
+1. Clone or download the repository.
 
-### Running the Application
-```bash
-streamlit run app.py
-```
+2. Create a virtual environment:
 
-## Features and Components
+   ```bash
+   python3 -m venv venv
+   ```
 
-### 1. Image Loading (`load_image` function)
-- Accepts various image formats (JPG, JPEG, PNG)
-- Converts uploaded images to numpy arrays for processing
-- Handles image preprocessing automatically
+3. Activate the virtual environment:
 
-![main](./img/main.png)
+   - On macOS/Linux:
+     ```bash
+     source venv/bin/activate
+     ```
+   - On Windows:
+     ```bash
+     venv\Scripts\activate
+     ```
 
-### 2. Core Analysis Methods
+4. Install dependencies:
 
-#### Basic Difference Detection (`compute_difference` function)
-- Resizes images to match dimensions
-- Converts images to grayscale for comparison
-- Calculates absolute difference between images
-- Applies threshold to highlight significant changes
-- Includes noise reduction using morphological operations
-- Returns both difference map and thresholded result
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-![diff](./img/difference.png)
+5. Run the application:
 
-#### Image Subtraction (`apply_image_subtraction` function)
-- Converts images to float32 for precise subtraction
-- Performs pixel-by-pixel subtraction
-- Normalizes results to visible range (0-255)
-- Useful for detecting subtle changes
+   ```bash
+   streamlit run app.py
+   ```
 
-![subtract](./img/img-subtraction.png)
+The app opens at `http://localhost:8501`.
 
-### 3. User Interface Components
 
-#### Image Upload Section
-- Dual file uploaders for before/after images
-- Supports common image formats
-- Side-by-side layout for easy comparison
 
-#### Analysis Tools (Three Tabs)
+## Usage
 
-##### Tab 1: Image Comparison
-- Interactive slider comparison between images
-- Side-by-side view with labels
-- Real-time visual comparison capability
+Upload a **Before** and **After** image using the two file pickers at the top. Previews with pixel dimensions appear immediately. If the images differ in size, the Before image is automatically resized to match the After image before any analysis.
 
-##### Tab 2: Change Detection
-Three detection methods:
-1. **Basic Difference**
-   - Shows difference map and thresholded changes
-   - Best for obvious physical changes
 
-2. **Image Subtraction**
-   - Displays subtle variations
-   - Useful for detecting minor modifications
 
-3. **Threshold Detection**
-   - Adjustable sensitivity slider (10-100)
-   - Customizable change detection threshold
-   - Highlights changes based on sensitivity setting
+## Analysis Tools
 
-![threshold](./img/img-threshold.png)
+### Tab 1 — Image Comparison
 
-##### Tab 3: Advanced Analysis
-1. **Edge Enhancement**
-   - Uses Canny edge detection
-   - Highlights boundaries of changed areas
-   - Useful for detecting structural modifications
+Visually compare the two images side by side. Switch between two modes using the **Comparison Mode** radio:
 
-2. **Change Contours**
-   - Draws green contours around changed regions
-   - Helps visualize the extent of changes
-   - Useful for identifying specific areas of interest
+- **Slider** — drag a divider left/right to reveal Before or After
+- **Toggle** — click `Before`, `After`, or `↔ Toggle` buttons to flip between full-resolution images
 
-![advanced](./img/advance.png)
+![Image Comparison](./img/image-comparison.png)
 
-## Best Practices for TSCM Analysis
 
-1. **Image Capture**
-   - Use consistent lighting conditions
-   - Maintain same camera position and angle
-   - Ensure images are clear and in focus
 
-2. **Analysis Workflow**
-   - Start with visual comparison
-   - Use basic difference for initial screening
-   - Apply threshold detection for detailed analysis
-   - Confirm findings with advanced analysis tools
+### Tab 2 — Change Detection
 
-3. **Sensitivity Adjustment**
-   - Start with default threshold (30)
-   - Increase sensitivity for subtle changes
-   - Decrease sensitivity to reduce false positives
+All methods display three live metrics at the top — **Changed Area %**, **Changed Pixels**, and **Distinct Regions** — before showing the visual results.
 
-## Troubleshooting
+#### Basic Difference
+Shows a grayscale difference map, a binary thresholded mask, and a red highlight overlay on the After image.
 
-Common issues and solutions:
-- **Image Size Mismatch**: Automatically handled by resize function
-- **Memory Errors**: Reduce image size before upload
-- **False Positives**: Adjust sensitivity threshold
-- **Noise**: Use morphological operations for cleanup
+![Basic Difference](./img/basic-difference.png)
 
-## Technical Notes
+#### Heat Map
+Renders change intensity as a JET colormap (blue = low change, red = high change) alongside the red highlight overlay. Useful for gauging the magnitude of changes, not just their location.
 
-- Images are processed in RGB and grayscale formats
-- Contour detection uses external retrieval method
-- Edge detection parameters: 100 (lower) and 200 (upper) thresholds
-- Morphological kernel size: 5x5 pixels
+![Heat Map](./img/heat-map.png)
+
+#### Image Subtraction
+Performs a pixel-wise float subtraction (After − Before), normalized to 0–255. Preserves gradient information rather than producing a binary result — useful for detecting subtle, gradual modifications.
+
+![Image Subtraction](./img/image-subtraction.png)
+
+#### Threshold Detection
+Applies a user-defined sensitivity threshold to the raw difference, showing only changes above that level alongside the highlight overlay.
+
+![Threshold Detection](./img/threshold-detection.png)
+
+**Detection Sensitivity slider (5–100, default 30):** applies to Basic Difference, Heat Map, and Threshold Detection.
+- Lower values → more sensitive, flags subtle changes
+- Higher values → fewer false positives, only significant changes
+
+
+
+### Tab 3 — Advanced Analysis
+
+Provides two simultaneous views for structural analysis of detected changes.
+
+- **Edge Enhancement** — runs Canny edge detection on the difference image. Canny Low (20–150) and High (50–300) thresholds are adjustable.
+- **Change Contours** — draws green contours around changed regions on the After image, with a region count in the caption.
+
+![Advanced Analysis](./img/advanced-analysis.png)
+
+A **Detection Threshold** slider at the top of this tab controls which pixels are considered changed for both views.
+
+
+
+## Best Practices
+
+- Use consistent lighting, camera position, and angle between shots
+- Start with **Basic Difference** for an initial read, then refine sensitivity
+- Use **Heat Map** to assess the severity and spread of changes
+- Use **Advanced Analysis** contours to identify and count distinct changed objects
+- If getting too many false positives, increase the sensitivity threshold; if missing subtle changes, decrease it
