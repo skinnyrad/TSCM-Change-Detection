@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 from streamlit_image_comparison import image_comparison
 
-st.set_page_config(page_title="TSCM Change Detection", layout="wide")
+st.set_page_config(page_title="TSCM Change Detection", layout="centered")
 
 
 # ── Image Loading ──────────────────────────────────────────────────────────────
