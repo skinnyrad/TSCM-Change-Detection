@@ -159,14 +159,12 @@ def main():
                 if st.button(
                     "Before",
                     use_container_width=True,
-                    type="secondary" if st.session_state.show_after else "primary",
                 ):
                     st.session_state.show_after = False
             with b2:
                 if st.button(
                     "After",
                     use_container_width=True,
-                    type="primary" if st.session_state.show_after else "secondary",
                 ):
                     st.session_state.show_after = True
             with b3:
