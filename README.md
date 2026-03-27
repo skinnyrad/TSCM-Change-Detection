@@ -1,6 +1,8 @@
 # TSCM Change Detection Analysis Tool
 
-A Streamlit web application for Technical Surveillance Countermeasures (TSCM) professionals to detect and analyze changes between two images. Upload a Before and After photo to identify potential modifications or anomalies in a surveillance area.
+A web application for Technical Surveillance Countermeasures (TSCM) professionals to detect and analyze changes between two images. Upload a Before and After photo to identify potential modifications or anomalies in a surveillance area.
+
+**Stack:** Go (Gin) backend · React 19 + TypeScript frontend · MUI · Pure-Go image processing (no OpenCV)
 
 ![Upload Screen](./img/main1.png)
 
@@ -10,46 +12,70 @@ A Streamlit web application for Technical Surveillance Countermeasures (TSCM) pr
 
 ## Installation
 
-**Prerequisites:** Python 3.8+
+### Option A — Run the pre-built binary
 
-1. Clone or download the repository.
+Download the latest release binary and run it directly. No runtime dependencies required.
 
-2. Create a virtual environment:
+```bash
+./tscm-change-detection
+```
 
-   ```bash
-   python3 -m venv venv
-   ```
+The app opens at `http://localhost:8080`.
 
-3. Activate the virtual environment:
+---
 
-   - On macOS/Linux:
-     ```bash
-     source venv/bin/activate
-     ```
-   - On Windows:
-     ```bash
-     venv\Scripts\activate
-     ```
+### Option B — Build from source
 
-4. Install dependencies:
+**Prerequisites:** [Go 1.25+](https://go.dev/dl/) · [Bun](https://bun.sh)
+
+1. Clone the repository:
 
    ```bash
-   pip install -r requirements.txt
+   git clone https://github.com/skinnyrad/tscm-change-detection.git
+   cd tscm-change-detection
    ```
 
-5. Run the application:
+2. Build the frontend:
 
    ```bash
-   streamlit run app.py
+   cd frontend && bun install && bun run build && cd ..
    ```
 
-The app opens at `http://localhost:8501`.
+3. Build the Go binary (embeds the frontend at compile time):
+
+   ```bash
+   go build -o tscm-change-detection .
+   ```
+
+4. Run:
+
+   ```bash
+   ./tscm-change-detection
+   ```
+
+The app opens at `http://localhost:8080`.
+
+---
+
+### Development mode
+
+Run the backend and frontend separately with hot-reload:
+
+```bash
+# Terminal 1 — Go API on :8080
+go run .
+
+# Terminal 2 — React dev server on :3000 (proxies /api/* to Go)
+cd frontend && bun --hot src/index.ts
+```
 
 
 
 ## Usage
 
-Upload a **Before** and **After** image using the two file pickers at the top. Previews with pixel dimensions appear immediately. If the images differ in size, the Before image is automatically resized to match the After image before any analysis.
+Upload a **Before** and **After** image using the two panels at the top. Previews appear immediately. If the images differ in size, the Before image is automatically resized to match the After image before analysis.
+
+Hover over any result image to reveal a **fullscreen button** in the top-right corner.
 
 
 
@@ -57,10 +83,10 @@ Upload a **Before** and **After** image using the two file pickers at the top. P
 
 ### Tab 1 — Image Comparison
 
-Visually compare the two images side by side. Switch between two modes using the **Comparison Mode** radio:
+Visually compare the two images side by side. Switch between two modes:
 
 - **Slider** — drag a divider left/right to reveal Before or After
-- **Toggle** — click `Before`, `After`, or `↔ Toggle` buttons to flip between full-resolution images
+- **Toggle** — click `Before`, `After`, or `↔ Toggle` to flip between full-resolution images
 
 ![Image Comparison](./img/image-comparison.png)
 
@@ -68,7 +94,7 @@ Visually compare the two images side by side. Switch between two modes using the
 
 ### Tab 2 — Change Detection
 
-All methods display three live metrics at the top — **Changed Area %**, **Changed Pixels**, and **Distinct Regions** — before showing the visual results.
+All methods display three live metrics — **Changed Area %**, **Changed Pixels**, and **Distinct Regions** — alongside the visual results. Results update automatically when the sensitivity slider is adjusted.
 
 #### Basic Difference
 Shows a grayscale difference map, a binary thresholded mask, and a red highlight overlay on the After image.
@@ -98,14 +124,14 @@ Applies a user-defined sensitivity threshold to the raw difference, showing only
 
 ### Tab 3 — Advanced Analysis
 
-Provides two simultaneous views for structural analysis of detected changes.
+Provides two simultaneous views for structural analysis of detected changes. Results update automatically as any slider is adjusted.
 
-- **Edge Enhancement** — runs Canny edge detection on the difference image. Canny Low (20–150) and High (50–300) thresholds are adjustable.
-- **Change Contours** — draws green contours around changed regions on the After image, with a region count in the caption.
+- **Edge Detection** — runs Canny edge detection on the difference image. Canny Low (20–150) and High (50–300) thresholds are adjustable.
+- **Change Contours** — draws green contours around changed regions on the After image, with a region count displayed.
 
 ![Advanced Analysis](./img/advanced-analysis.png)
 
-A **Detection Threshold** slider at the top of this tab controls which pixels are considered changed for both views.
+A **Detection Threshold** slider controls which pixels are considered changed for both views.
 
 
 
