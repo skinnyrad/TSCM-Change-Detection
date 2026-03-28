@@ -10,11 +10,11 @@ import { ResultImage } from './ResultImage';
 import { StatsBar } from './StatsBar';
 
 interface AdvancedAnalysisTabProps {
-  before: File;
-  after: File;
+  ready: boolean;
+  imageKey: string;
 }
 
-export function AdvancedAnalysisTab({ before, after }: AdvancedAnalysisTabProps) {
+export function AdvancedAnalysisTab({ ready, imageKey }: AdvancedAnalysisTabProps) {
   const [sensitivity, setSensitivity] = useState(30);
   const [cannyLow, setCannyLow] = useState(100);
   const [cannyHigh, setCannyHigh] = useState(200);
@@ -22,19 +22,18 @@ export function AdvancedAnalysisTab({ before, after }: AdvancedAnalysisTabProps)
   const cannyInvalid = cannyLow >= cannyHigh;
 
   const { data, error, analyze } = useAnalyze({
-    before,
-    after,
     method: 'advanced',
     sensitivity,
     cannyLow,
     cannyHigh,
+    ready,
   });
 
   useEffect(() => {
     if (cannyInvalid) return;
     const timer = setTimeout(analyze, 300);
     return () => clearTimeout(timer);
-  }, [before, after, sensitivity, cannyLow, cannyHigh, cannyInvalid, analyze]);
+  }, [ready, imageKey, sensitivity, cannyLow, cannyHigh, cannyInvalid, analyze]);
 
   const images = data?.images;
 

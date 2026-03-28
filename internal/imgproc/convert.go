@@ -6,6 +6,11 @@ import (
 	"image/draw"
 )
 
+// ToNRGBA converts any image.Image to *image.NRGBA with (0,0) origin.
+func ToNRGBA(src image.Image) *image.NRGBA {
+	return toNRGBA(src)
+}
+
 // toNRGBA converts any image.Image to *image.NRGBA with (0,0) origin.
 func toNRGBA(src image.Image) *image.NRGBA {
 	b := src.Bounds()

@@ -2,12 +2,12 @@ import { useCallback, useRef, useState } from 'react';
 import type { AnalyzeResponse, Method } from '../types/api';
 
 export interface UseAnalyzeParams {
-  before: File | null;
-  after: File | null;
   method: Method;
   sensitivity: number;
   cannyLow?: number;
   cannyHigh?: number;
+  // `ready` gates the analyze call — set false while images are uploading
+  ready: boolean;
 }
 
 export interface UseAnalyzeResult {
@@ -23,17 +23,13 @@ export function useAnalyze(params: UseAnalyzeParams): UseAnalyzeResult {
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Always-current params ref so `analyze` can be a stable function identity.
-  // This prevents the useEffect auto-trigger in tabs from firing on every
-  // render just because `analyze` got a new reference.
   const paramsRef = useRef(params);
   paramsRef.current = params;
 
   const analyze = useCallback(async () => {
-    const { before, after, method, sensitivity, cannyLow, cannyHigh } = paramsRef.current;
-    if (!before || !after) return;
+    const { method, sensitivity, cannyLow, cannyHigh, ready } = paramsRef.current;
+    if (!ready) return;
 
-    // Cancel any in-flight request that was superseded by this call
     abortRef.current?.abort();
     abortRef.current = new AbortController();
 
@@ -41,8 +37,6 @@ export function useAnalyze(params: UseAnalyzeParams): UseAnalyzeResult {
     setError(null);
 
     const formData = new FormData();
-    formData.append('before', before);
-    formData.append('after', after);
     formData.append('method', method);
     formData.append('sensitivity', String(sensitivity));
     if (cannyLow !== undefined) formData.append('canny_low', String(cannyLow));

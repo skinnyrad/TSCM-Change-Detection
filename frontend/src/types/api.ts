@@ -1,5 +1,16 @@
 export type Method = 'basic' | 'subtraction' | 'threshold' | 'heatmap' | 'advanced';
 
+export interface AnchorPoint {
+  x: number; // relative [0,1] within image display bounds
+  y: number;
+}
+
+export interface PointPair {
+  id: number;
+  src: AnchorPoint | null; // point in "before" image
+  dst: AnchorPoint | null; // point in "after" image
+}
+
 export interface AnalyzeStats {
   pct: number;
   changed_px: number;

@@ -16,7 +16,6 @@
     "@mui/x-charts": "^8.28.0",
     "@mui/x-data-grid": "^8.28.1",
     "react": "^19",
-    "react-compare-slider": "^4.0.0",
     "react-dom": "^19"
   },
   "devDependencies": {

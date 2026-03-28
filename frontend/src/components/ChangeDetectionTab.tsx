@@ -14,8 +14,8 @@ import { ResultImage } from './ResultImage';
 import { StatsBar } from './StatsBar';
 
 interface ChangeDetectionTabProps {
-  before: File;
-  after: File;
+  ready: boolean;
+  imageKey: string;
 }
 
 const METHOD_LABELS: Record<Method, string> = {
@@ -26,23 +26,22 @@ const METHOD_LABELS: Record<Method, string> = {
   advanced: 'Advanced Analysis',
 };
 
-export function ChangeDetectionTab({ before, after }: ChangeDetectionTabProps) {
+export function ChangeDetectionTab({ ready, imageKey }: ChangeDetectionTabProps) {
   const [method, setMethod] = useState<Method>('basic');
   const [sensitivity, setSensitivity] = useState(30);
 
   const { data, error, analyze } = useAnalyze({
-    before,
-    after,
     method,
     sensitivity,
+    ready,
   });
 
-  // Auto-analyze when files or key params change, debounced so StrictMode's
-  // unmount/remount cycle cancels the timer rather than aborting an HTTP request.
+  // Auto-analyze when params change, debounced so StrictMode's unmount/remount
+  // cycle cancels the timer rather than aborting an HTTP request.
   useEffect(() => {
     const timer = setTimeout(analyze, 300);
     return () => clearTimeout(timer);
-  }, [before, after, method, sensitivity, analyze]);
+  }, [ready, imageKey, method, sensitivity, analyze]);
 
   const images = data?.images;
 

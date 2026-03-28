@@ -73,9 +73,9 @@ cd frontend && bun --hot src/index.ts
 
 ## Usage
 
-Upload a **Before** and **After** image using the two panels at the top. Previews appear immediately. If the images differ in size, the Before image is automatically resized to match the After image before analysis.
+Upload a **Before** and **After** image using the two panels at the top. Previews appear immediately. If the images differ in size, the Before image is automatically resized to match the After image for analysis.
 
-Hover over any result image to reveal a **fullscreen button** in the top-right corner.
+Once both images are uploaded, a **Transform button** (⇄) appears in the bottom-right corner. Click it to open the alignment dialog, where you can place up to 8 matching point pairs to perspective-warp the Before image onto the After image. This corrects for camera angle differences and reduces false positives. The button turns solid blue when an alignment is active.
 
 
 
@@ -83,10 +83,11 @@ Hover over any result image to reveal a **fullscreen button** in the top-right c
 
 ### Tab 1 — Image Comparison
 
-Visually compare the two images side by side. Switch between two modes:
+Visually compare the two images side by side. Switch between three modes:
 
-- **Slider** — drag a divider left/right to reveal Before or After
-- **Toggle** — click `Before`, `After`, or `↔ Toggle` to flip between full-resolution images
+- **Slider** — drag a divider left/right to reveal Before or After; the handle can also be dragged vertically to inspect any part of the image
+- **Toggle** — click `Before`, `After`, or `↔` to flip between full-resolution images instantly
+- **Auto** — automatically flickers between Before and After at a speed controlled by the Speed slider (100 ms – 2 s per frame)
 
 ![Image Comparison](./img/image-comparison.png)
 
@@ -138,6 +139,7 @@ A **Detection Threshold** slider controls which pixels are considered changed fo
 ## Best Practices
 
 - Use consistent lighting, camera position, and angle between shots
+- If photos were taken from slightly different positions or angles, use the **alignment tool** (⇄ FAB) to mark 4–8 matching landmarks before running analysis — this significantly reduces geometric false positives
 - Start with **Basic Difference** for an initial read, then refine sensitivity
 - Use **Heat Map** to assess the severity and spread of changes
 - Use **Advanced Analysis** contours to identify and count distinct changed objects

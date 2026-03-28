@@ -9,12 +9,14 @@ import UploadFileRoundedIcon from '@mui/icons-material/UploadFileRounded';
 interface DropZoneProps {
   label: string;
   file: File | null;
+  // Server-rendered PNG URL — guaranteed displayable regardless of input format.
+  // Takes precedence over the raw file for preview.
+  displayUrl?: string | null;
   onFile: (f: File) => void;
 }
 
-function DropZone({ label, file, onFile }: DropZoneProps) {
+function DropZone({ label, file, displayUrl, onFile }: DropZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const objectUrl = file ? URL.createObjectURL(file) : null;
 
   return (
     <Paper
@@ -37,7 +39,7 @@ function DropZone({ label, file, onFile }: DropZoneProps) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png"
+        accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif"
         style={{ display: 'none' }}
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -45,15 +47,16 @@ function DropZone({ label, file, onFile }: DropZoneProps) {
         }}
       />
 
-      {file && objectUrl ? (
+      {file ? (
         <>
-          <Box
-            component="img"
-            src={objectUrl}
-            alt={label}
-            sx={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 1 }}
-            onLoad={() => URL.revokeObjectURL(objectUrl)}
-          />
+          {displayUrl && (
+            <Box
+              component="img"
+              src={displayUrl}
+              alt={label}
+              sx={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 1 }}
+            />
+          )}
           <Typography variant="caption" color="text.secondary" textAlign="center">
             {file.name} · Click to replace
           </Typography>
@@ -68,7 +71,7 @@ function DropZone({ label, file, onFile }: DropZoneProps) {
             Choose Image
           </Button>
           <Typography variant="caption" color="text.disabled">
-            JPG or PNG
+            JPG, PNG, or HEIC
           </Typography>
         </>
       )}
@@ -81,17 +84,21 @@ interface UploadPanelProps {
   after: File | null;
   onBefore: (f: File) => void;
   onAfter: (f: File) => void;
+  beforeDisplayUrl?: string | null;
+  afterDisplayUrl?: string | null;
+  warpedBeforeUrl?: string | null;
   resized?: boolean;
   beforeDims?: { w: number; h: number };
   afterDims?: { w: number; h: number };
+  alignmentActive?: boolean;
 }
 
-export function UploadPanel({ before, after, onBefore, onAfter, resized, beforeDims, afterDims }: UploadPanelProps) {
+export function UploadPanel({ before, after, onBefore, onAfter, beforeDisplayUrl, afterDisplayUrl, warpedBeforeUrl, resized, beforeDims, afterDims, alignmentActive }: UploadPanelProps) {
   return (
     <Box sx={{ mb: 3 }}>
       <Box sx={{ display: 'flex', gap: 2, mb: resized ? 2 : 0 }}>
-        <DropZone label="Before Image" file={before} onFile={onBefore} />
-        <DropZone label="After Image" file={after} onFile={onAfter} />
+        <DropZone label="Before Image" file={before} displayUrl={warpedBeforeUrl ?? beforeDisplayUrl} onFile={onBefore} />
+        <DropZone label="After Image" file={after} displayUrl={afterDisplayUrl} onFile={onAfter} />
       </Box>
       {resized && beforeDims && afterDims && (
         <Alert severity="warning" sx={{ mt: 2 }}>

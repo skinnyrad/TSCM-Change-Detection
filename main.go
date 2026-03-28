@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"net/http"
 
@@ -14,7 +15,9 @@ import (
 var frontendDist embed.FS
 
 func main() {
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
+	r.SetTrustedProxies([]string{"127.0.0.1", "::1"})
 
 	// CORS: allow the Bun dev server (localhost:3000) during development
 	r.Use(cors.New(cors.Config{
@@ -25,7 +28,13 @@ func main() {
 
 	// API routes
 	apiGroup := r.Group("/api")
+	apiGroup.POST("/upload/before", api.HandleUploadBefore)
+	apiGroup.POST("/upload/after", api.HandleUploadAfter)
 	apiGroup.POST("/analyze", api.HandleAnalyze)
+	apiGroup.POST("/warp", api.HandleWarp)
+	apiGroup.POST("/clear-warp", api.HandleClearWarp)
+	apiGroup.GET("/image/before", api.HandleImageBefore)
+	apiGroup.GET("/image/after", api.HandleImageAfter)
 
 	// Serve embedded React frontend for all other routes (SPA fallback)
 	subFS, err := fs.Sub(frontendDist, "frontend/dist")
@@ -50,5 +59,7 @@ func main() {
 		fileServer.ServeHTTP(c.Writer, c.Request)
 	})
 
-	r.Run(":8080")
+	const addr = ":8080"
+	fmt.Println("TSCM Change Detection is available at http://localhost:8080")
+	r.Run(addr)
 }
