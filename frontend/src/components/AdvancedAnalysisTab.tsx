@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import Divider from '@mui/material/Divider';
-import Grid from '@mui/material/Grid';
 import Slider from '@mui/material/Slider';
 import Typography from '@mui/material/Typography';
 import { useAnalyze } from '../hooks/useAnalyze';
@@ -15,7 +14,9 @@ interface AdvancedAnalysisTabProps {
 }
 
 export function AdvancedAnalysisTab({ ready, imageKey }: AdvancedAnalysisTabProps) {
-  const [sensitivity, setSensitivity] = useState(30);
+  const [strength, setStrength] = useState(40);
+  const [morphSize, setMorphSize] = useState(2);
+  const [minRegion, setMinRegion] = useState(50);
   const [cannyLow, setCannyLow] = useState(100);
   const [cannyHigh, setCannyHigh] = useState(200);
 
@@ -23,7 +24,9 @@ export function AdvancedAnalysisTab({ ready, imageKey }: AdvancedAnalysisTabProp
 
   const { data, error, analyze } = useAnalyze({
     method: 'advanced',
-    sensitivity,
+    strength,
+    minRegion,
+    morphSize,
     cannyLow,
     cannyHigh,
     ready,
@@ -33,56 +36,83 @@ export function AdvancedAnalysisTab({ ready, imageKey }: AdvancedAnalysisTabProp
     if (cannyInvalid) return;
     const timer = setTimeout(analyze, 300);
     return () => clearTimeout(timer);
-  }, [ready, imageKey, sensitivity, cannyLow, cannyHigh, cannyInvalid, analyze]);
+  }, [ready, imageKey, strength, morphSize, minRegion, cannyLow, cannyHigh, cannyInvalid, analyze]);
 
   const images = data?.images;
 
   return (
     <Box>
       {/* Controls */}
-      <Grid container spacing={3} sx={{ mb: 3 }}>
-        <Grid size={{ xs: 12, sm: 4 }}>
+      <Box sx={{ display: 'flex', gap: 3, mb: 3, flexWrap: 'wrap' }}>
+        <Box sx={{ flex: 1, minWidth: 120 }}>
           <Typography variant="body2" color="text.secondary" gutterBottom>
-            Detection Threshold: {sensitivity}
+            Detection Strength: {strength}
           </Typography>
           <Slider
-            value={sensitivity}
+            value={strength}
             min={5}
             max={100}
             step={1}
-            onChange={(_, v) => setSensitivity(v as number)}
+            onChange={(_, v) => setStrength(v as number)}
             size="small"
           />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 120 }}>
           <Typography variant="body2" color="text.secondary" gutterBottom>
-            Canny Low Threshold: {cannyLow}
+            Noise Reduction: {morphSize <= 1 ? 'off' : `${morphSize}×${morphSize}`}
+          </Typography>
+          <Slider
+            value={morphSize}
+            min={1}
+            max={11}
+            step={1}
+            marks
+            onChange={(_, v) => setMorphSize(v as number)}
+            size="small"
+          />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 120 }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Min Region Size: {minRegion} px
+          </Typography>
+          <Slider
+            value={minRegion}
+            min={1}
+            max={500}
+            step={1}
+            onChange={(_, v) => setMinRegion(v as number)}
+            size="small"
+          />
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 120 }}>
+          <Typography variant="body2" color="text.secondary" gutterBottom>
+            Canny Low: {cannyLow}
           </Typography>
           <Slider
             value={cannyLow}
-            min={20}
-            max={150}
+            min={1}
+            max={254}
             step={1}
             onChange={(_, v) => setCannyLow(v as number)}
             size="small"
             color={cannyInvalid ? 'error' : 'primary'}
           />
-        </Grid>
-        <Grid size={{ xs: 12, sm: 4 }}>
+        </Box>
+        <Box sx={{ flex: 1, minWidth: 120 }}>
           <Typography variant="body2" color="text.secondary" gutterBottom>
-            Canny High Threshold: {cannyHigh}
+            Canny High: {cannyHigh}
           </Typography>
           <Slider
             value={cannyHigh}
-            min={50}
-            max={300}
+            min={2}
+            max={255}
             step={1}
             onChange={(_, v) => setCannyHigh(v as number)}
             size="small"
             color={cannyInvalid ? 'error' : 'primary'}
           />
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
 
       {cannyInvalid && (
         <Alert severity="warning" sx={{ mb: 2 }}>

@@ -89,7 +89,7 @@ func HandleUploadAfter(c *gin.Context) {
 }
 
 // HandleAnalyze runs change detection against the pre-aligned stored images.
-// POST /api/analyze — form fields: method, sensitivity, canny_low, canny_high
+// POST /api/analyze — form fields: method, strength, canny_low, canny_high
 func HandleAnalyze(c *gin.Context) {
 	if !state.Global.HasImages() {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "images not ready — upload both before and after first"})
@@ -109,13 +109,29 @@ func HandleAnalyze(c *gin.Context) {
 		return
 	}
 
-	sensitivity := parseIntDefault(c.PostForm("sensitivity"), 30)
-	if sensitivity < 5 || sensitivity > 100 {
-		sensitivity = 30
+	strength := parseIntDefault(c.PostForm("strength"), 60)
+	if strength < 0 || strength > 99 {
+		strength = 60
+	}
+
+	minRegion := parseIntDefault(c.PostForm("min_region"), 25)
+	if minRegion < 1 {
+		minRegion = 1
+	}
+
+	morphSize := parseIntDefault(c.PostForm("morph_size"), 5)
+	if morphSize < 1 {
+		morphSize = 1
 	}
 
 	cannyLow := parseIntDefault(c.PostForm("canny_low"), 100)
+	if cannyLow < 0 || cannyLow > 255 {
+		cannyLow = 100
+	}
 	cannyHigh := parseIntDefault(c.PostForm("canny_high"), 200)
+	if cannyHigh < 0 || cannyHigh > 255 {
+		cannyHigh = 200
+	}
 
 	if method == "advanced" && cannyLow >= cannyHigh {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "canny_low must be less than canny_high"})
@@ -125,7 +141,7 @@ func HandleAnalyze(c *gin.Context) {
 	before, after, resized := state.Global.AnalysisPair()
 	bDims, aDims, _ := state.Global.Dims()
 
-	diff, thresh := imgproc.ComputeDiff(before, after, uint8(sensitivity))
+	diff, thresh := imgproc.ComputeDiff(before, after, uint8(strength), morphSize, minRegion)
 	stats := imgproc.ChangeStats(thresh)
 
 	images := map[string]string{}

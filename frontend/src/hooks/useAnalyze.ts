@@ -3,7 +3,9 @@ import type { AnalyzeResponse, Method } from '../types/api';
 
 export interface UseAnalyzeParams {
   method: Method;
-  sensitivity: number;
+  strength: number;
+  minRegion: number;
+  morphSize: number;
   cannyLow?: number;
   cannyHigh?: number;
   // `ready` gates the analyze call — set false while images are uploading
@@ -27,7 +29,7 @@ export function useAnalyze(params: UseAnalyzeParams): UseAnalyzeResult {
   paramsRef.current = params;
 
   const analyze = useCallback(async () => {
-    const { method, sensitivity, cannyLow, cannyHigh, ready } = paramsRef.current;
+    const { method, strength, minRegion, morphSize, cannyLow, cannyHigh, ready } = paramsRef.current;
     if (!ready) return;
 
     abortRef.current?.abort();
@@ -38,7 +40,9 @@ export function useAnalyze(params: UseAnalyzeParams): UseAnalyzeResult {
 
     const formData = new FormData();
     formData.append('method', method);
-    formData.append('sensitivity', String(sensitivity));
+    formData.append('strength', String(100 - strength));
+    formData.append('min_region', String(minRegion));
+    formData.append('morph_size', String(morphSize));
     if (cannyLow !== undefined) formData.append('canny_low', String(cannyLow));
     if (cannyHigh !== undefined) formData.append('canny_high', String(cannyHigh));
 

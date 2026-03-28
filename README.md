@@ -95,7 +95,7 @@ Visually compare the two images side by side. Switch between three modes:
 
 ### Tab 2 — Change Detection
 
-All methods display three live metrics — **Changed Area %**, **Changed Pixels**, and **Distinct Regions** — alongside the visual results. Results update automatically when the sensitivity slider is adjusted.
+All methods display three live metrics — **Changed Area %**, **Changed Pixels**, and **Distinct Regions** — alongside the visual results. Results update automatically when the strength slider is adjusted.
 
 #### Basic Difference
 Shows a grayscale difference map, a binary thresholded mask, and a red highlight overlay on the After image.
@@ -113,11 +113,11 @@ Performs a pixel-wise float subtraction (After − Before), normalized to 0–25
 ![Image Subtraction](./img/image-subtraction.png)
 
 #### Threshold Detection
-Applies a user-defined sensitivity threshold to the raw difference, showing only changes above that level alongside the highlight overlay.
+Applies a user-defined strength threshold to the raw difference, showing only changes above that level alongside the highlight overlay.
 
 ![Threshold Detection](./img/threshold-detection.png)
 
-**Detection Sensitivity slider (5–100, default 30):** applies to Basic Difference, Heat Map, and Threshold Detection.
+**Detection Strength slider (5–100, default 30):** applies to Basic Difference, Heat Map, and Threshold Detection.
 - Lower values → more sensitive, flags subtle changes
 - Higher values → fewer false positives, only significant changes
 
@@ -140,7 +140,7 @@ A **Detection Threshold** slider controls which pixels are considered changed fo
 
 - Use consistent lighting, camera position, and angle between shots
 - If photos were taken from slightly different positions or angles, use the **alignment tool** (⇄ FAB) to mark 4–8 matching landmarks before running analysis — this significantly reduces geometric false positives
-- Start with **Basic Difference** for an initial read, then refine sensitivity
+- Start with **Basic Difference** for an initial read, then refine strength
 - Use **Heat Map** to assess the severity and spread of changes
 - Use **Advanced Analysis** contours to identify and count distinct changed objects
-- If getting too many false positives, increase the sensitivity threshold; if missing subtle changes, decrease it
+- If getting too many false positives, increase the strength threshold; if missing subtle changes, decrease it
