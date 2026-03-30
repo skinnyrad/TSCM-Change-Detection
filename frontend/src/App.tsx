@@ -20,7 +20,7 @@ import TransformRoundedIcon from '@mui/icons-material/TransformRounded';
 import { UploadPanel } from './components/UploadPanel';
 import { ImageComparisonTab } from './components/ImageComparisonTab';
 import { ChangeDetectionTab } from './components/ChangeDetectionTab';
-import { AdvancedAnalysisTab } from './components/AdvancedAnalysisTab';
+import { AlternateAnalysisTab } from './components/AlternateAnalysisTab';
 import { AlignmentDialog } from './components/AlignmentDialog';
 import { useUpload } from './hooks/useUpload';
 
@@ -119,7 +119,7 @@ export function App() {
             >
               <Tab icon={<CompareRoundedIcon />} iconPosition="start" label="Image Comparison" />
               <Tab icon={<SearchRoundedIcon />} iconPosition="start" label="Change Detection" />
-              <Tab icon={<BiotechRoundedIcon />} iconPosition="start" label="Advanced Analysis" />
+              <Tab icon={<BiotechRoundedIcon />} iconPosition="start" label="Alternate Analysis" />
             </Tabs>
 
             <Box sx={{ p: 3 }}>
@@ -130,7 +130,7 @@ export function App() {
                 />
               )}
               {activeTab === 1 && <ChangeDetectionTab ready={ready} imageKey={imageKey} />}
-              {activeTab === 2 && <AdvancedAnalysisTab ready={ready} imageKey={imageKey} />}
+              {activeTab === 2 && <AlternateAnalysisTab ready={ready} imageKey={imageKey} />}
             </Box>
           </Paper>
         )}

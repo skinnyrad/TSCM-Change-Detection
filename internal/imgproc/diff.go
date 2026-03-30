@@ -2,7 +2,130 @@ package imgproc
 
 import (
 	"image"
+	"math"
+
+	"github.com/anthonynsimon/bild/blur"
 )
+
+// DiffOptions controls the improved change detection pipeline used by ComputeDiffV2.
+// Zero values disable optional stages; NormalizeLuma and PreBlurSigma have active defaults
+// that must be set explicitly.
+type DiffOptions struct {
+	Threshold     uint8
+	MorphSize     int     // open kernel side length (1=off)
+	CloseSize     int     // close kernel side length (1=off)
+	MinRegion     int     // minimum connected-component size in pixels (1=off)
+	PreBlurSigma  float64 // Gaussian σ applied to colour images before AbsDiff (0=off)
+	NormalizeLuma bool    // shift per-image mean luma to 128 before diff
+}
+
+// NormalizeLuma returns a copy of img with each pixel's RGB channels shifted so
+// the image mean luma equals 128. Compensates for global brightness drift between
+// shots without affecting local contrast. Uses Rec. 601 luma weights.
+func NormalizeLuma(img *image.NRGBA) *image.NRGBA {
+	b := img.Bounds()
+	w, h := b.Dx(), b.Dy()
+	// Pass 1: compute mean luma.
+	var sum float64
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			i := y*img.Stride + x*4
+			luma := float64(img.Pix[i])*0.299 +
+				float64(img.Pix[i+1])*0.587 +
+				float64(img.Pix[i+2])*0.114
+			sum += luma
+		}
+	}
+	meanLuma := sum / float64(w*h)
+	delta := 128.0 - meanLuma
+	// Pass 2: apply delta to RGB, preserving alpha.
+	out := image.NewNRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			i := y*img.Stride + x*4
+			o := y*out.Stride + x*4
+			out.Pix[o] = clampUint8(float64(img.Pix[i]) + delta)
+			out.Pix[o+1] = clampUint8(float64(img.Pix[i+1]) + delta)
+			out.Pix[o+2] = clampUint8(float64(img.Pix[i+2]) + delta)
+			out.Pix[o+3] = img.Pix[i+3]
+		}
+	}
+	return out
+}
+
+func clampUint8(v float64) uint8 {
+	return uint8(math.Max(0, math.Min(255, math.Round(v))))
+}
+
+// GaussianBlurNRGBA applies a Gaussian blur with radius sigma to an NRGBA image.
+// sigma=0 returns img unchanged. Wraps bild/blur.Gaussian.
+func GaussianBlurNRGBA(img *image.NRGBA, sigma float64) *image.NRGBA {
+	if sigma <= 0 {
+		return img
+	}
+	blurred := blur.Gaussian(img, sigma) // returns *image.RGBA
+	return rgbaToNRGBA(blurred)
+}
+
+// MorphologicalClose applies morphological closing (dilation then erosion) to a
+// binary mask using a square size×size structuring element.
+// Fills small holes within detected regions without expanding their outer boundary.
+// size=1 is a no-op.
+func MorphologicalClose(mask *image.Gray, size int) *image.Gray {
+	if size <= 1 {
+		return mask
+	}
+	return fastBinaryErode(fastBinaryDilate(mask, size), size)
+}
+
+// PrepareImages applies the NormalizeLuma and GaussianBlur preprocessing steps
+// from opts to copies of before and after. Use this when you need preprocessed
+// images without running the full diff pipeline (e.g. for Subtract or Heatmap).
+func PrepareImages(before, after *image.NRGBA, opts DiffOptions) (*image.NRGBA, *image.NRGBA) {
+	b, a := before, after
+	if opts.NormalizeLuma {
+		b = NormalizeLuma(b)
+		a = NormalizeLuma(a)
+	}
+	if opts.PreBlurSigma > 0 {
+		b = GaussianBlurNRGBA(b, opts.PreBlurSigma)
+		a = GaussianBlurNRGBA(a, opts.PreBlurSigma)
+	}
+	return b, a
+}
+
+// ComputeDiffV2 runs the improved change detection pipeline using DiffOptions.
+//
+// Pipeline:
+//
+//	[NormalizeLuma] → [GaussianBlur] → AbsDiff → BinaryThreshold →
+//	[MorphologicalOpen] → [MorphologicalClose] → [FilterByMinRegionSize]
+//
+// Returns (raw_diff_map, binary_mask). Does not mutate the input images.
+func ComputeDiffV2(before, after *image.NRGBA, opts DiffOptions) (*image.Gray, *image.Gray) {
+	b, a := before, after
+	if opts.NormalizeLuma {
+		b = NormalizeLuma(b)
+		a = NormalizeLuma(a)
+	}
+	if opts.PreBlurSigma > 0 {
+		b = GaussianBlurNRGBA(b, opts.PreBlurSigma)
+		a = GaussianBlurNRGBA(a, opts.PreBlurSigma)
+	}
+	diff := AbsDiff(b, a)
+	thresh := BinaryThreshold(diff, opts.Threshold)
+	if opts.MorphSize > 1 {
+		thresh = MorphologicalOpen(thresh, opts.MorphSize)
+	}
+	if opts.CloseSize > 1 {
+		thresh = MorphologicalClose(thresh, opts.CloseSize)
+	}
+	if opts.MinRegion > 1 {
+		thresh = FilterByMinRegionSize(thresh, opts.MinRegion)
+	}
+	return diff, thresh
+}
+
 
 // AbsDiff computes the absolute per-pixel grayscale difference between two
 // NRGBA images. Uses direct Pix access for speed.

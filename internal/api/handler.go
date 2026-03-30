@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"image"
 	_ "image/jpeg"
 	"image/png"
@@ -88,116 +87,35 @@ func HandleUploadAfter(c *gin.Context) {
 	})
 }
 
-// HandleAnalyze runs change detection against the pre-aligned stored images.
-// POST /api/analyze — form fields: method, strength, canny_low, canny_high
+// HandleAnalyze runs change detection and returns the highlight image + stats.
+// POST /api/analyze
 func HandleAnalyze(c *gin.Context) {
 	if !state.Global.HasImages() {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "images not ready — upload both before and after first"})
 		return
 	}
 
-	method := c.PostForm("method")
-	if method == "" {
-		method = "basic"
-	}
-	validMethods := map[string]bool{
-		"basic": true, "subtraction": true, "threshold": true,
-		"heatmap": true, "advanced": true,
-	}
-	if !validMethods[method] {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("invalid method: %q", method)})
-		return
-	}
+	opts := parseDiffOpts(c)
 
-	strength := parseIntDefault(c.PostForm("strength"), 60)
-	if strength < 0 || strength > 99 {
-		strength = 60
-	}
-
-	minRegion := parseIntDefault(c.PostForm("min_region"), 25)
-	if minRegion < 1 {
-		minRegion = 1
-	}
-
-	morphSize := parseIntDefault(c.PostForm("morph_size"), 5)
-	if morphSize < 1 {
-		morphSize = 1
-	}
-
-	cannyLow := parseIntDefault(c.PostForm("canny_low"), 100)
-	if cannyLow < 0 || cannyLow > 255 {
-		cannyLow = 100
-	}
-	cannyHigh := parseIntDefault(c.PostForm("canny_high"), 200)
-	if cannyHigh < 0 || cannyHigh > 255 {
-		cannyHigh = 200
-	}
-
-	if method == "advanced" && cannyLow >= cannyHigh {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "canny_low must be less than canny_high"})
-		return
+	highlightR := uint8(parseIntDefault(c.PostForm("highlight_r"), 255))
+	highlightG := uint8(parseIntDefault(c.PostForm("highlight_g"), 60))
+	highlightB := uint8(parseIntDefault(c.PostForm("highlight_b"), 60))
+	highlightAlpha := parseFloatDefault(c.PostForm("highlight_alpha"), 0.55)
+	if highlightAlpha < 0 || highlightAlpha > 1 {
+		highlightAlpha = 0.55
 	}
 
 	before, after, resized := state.Global.AnalysisPair()
 	bDims, aDims, _ := state.Global.Dims()
 
-	diff, thresh := imgproc.ComputeDiff(before, after, uint8(strength), morphSize, minRegion)
+	_, thresh := imgproc.ComputeDiffV2(before, after, opts)
 	stats := imgproc.ChangeStats(thresh)
 
+	highlighted := imgproc.HighlightChanges(after, thresh, [3]uint8{highlightR, highlightG, highlightB}, highlightAlpha)
+
 	images := map[string]string{}
-	highlightColor := [3]uint8{255, 60, 60}
-
-	switch method {
-	case "basic":
-		if s, err := imgproc.EncodeBase64PNG(diff); err == nil {
-			images["diff_map"] = s
-		}
-		if s, err := imgproc.EncodeBase64PNG(thresh); err == nil {
-			images["threshold_mask"] = s
-		}
-		highlighted := imgproc.HighlightChanges(after, thresh, highlightColor, 0.55)
-		if s, err := imgproc.EncodeBase64PNG(highlighted); err == nil {
-			images["highlight"] = s
-		}
-
-	case "subtraction":
-		subtracted := imgproc.Subtract(before, after)
-		if s, err := imgproc.EncodeBase64PNG(subtracted); err == nil {
-			images["subtraction"] = s
-		}
-		highlighted := imgproc.HighlightChanges(after, thresh, highlightColor, 0.55)
-		if s, err := imgproc.EncodeBase64PNG(highlighted); err == nil {
-			images["highlight"] = s
-		}
-
-	case "threshold":
-		if s, err := imgproc.EncodeBase64PNG(thresh); err == nil {
-			images["threshold_mask"] = s
-		}
-		highlighted := imgproc.HighlightChanges(after, thresh, highlightColor, 0.55)
-		if s, err := imgproc.EncodeBase64PNG(highlighted); err == nil {
-			images["highlight"] = s
-		}
-
-	case "heatmap":
-		heatmap := imgproc.JETColormap(diff)
-		if s, err := imgproc.EncodeBase64PNG(heatmap); err == nil {
-			images["heatmap"] = s
-		}
-		highlighted := imgproc.HighlightChanges(after, thresh, highlightColor, 0.55)
-		if s, err := imgproc.EncodeBase64PNG(highlighted); err == nil {
-			images["highlight"] = s
-		}
-
-	case "advanced":
-		edges := imgproc.CannyEdge(diff, uint8(cannyLow), uint8(cannyHigh))
-		if s, err := imgproc.EncodeBase64PNG(edges); err == nil {
-			images["edges"] = s
-		}
-		contoured, _ := imgproc.DrawContours(after, thresh, [3]uint8{0, 255, 0})
-		if s, err := imgproc.EncodeBase64PNG(contoured); err == nil {
-			images["contours"] = s
-		}
+	if s, err := imgproc.EncodeBase64PNG(highlighted); err == nil {
+		images["highlight"] = s
 	}
 
 	c.JSON(http.StatusOK, analyzeResponse{
@@ -207,6 +125,88 @@ func HandleAnalyze(c *gin.Context) {
 		AfterDims:  dimsJSON{W: aDims.W, H: aDims.H},
 		Resized:    resized,
 	})
+}
+
+// HandleAnalyzeDiff returns the raw grayscale difference map.
+// POST /api/analyze/diff
+func HandleAnalyzeDiff(c *gin.Context) {
+	if !state.Global.HasImages() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "images not ready"})
+		return
+	}
+	opts := parseDiffOpts(c)
+	before, after, _ := state.Global.AnalysisPair()
+	diff, _ := imgproc.ComputeDiffV2(before, after, opts)
+	s, err := imgproc.EncodeBase64PNG(diff)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "encoding failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"image": s})
+}
+
+// HandleAnalyzeSubtraction returns the per-channel colour subtraction image.
+// POST /api/analyze/subtraction
+func HandleAnalyzeSubtraction(c *gin.Context) {
+	if !state.Global.HasImages() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "images not ready"})
+		return
+	}
+	opts := parseDiffOpts(c)
+	rawBefore, rawAfter, _ := state.Global.AnalysisPair()
+	before, after := imgproc.PrepareImages(rawBefore, rawAfter, opts)
+	subtracted := imgproc.Subtract(before, after)
+	s, err := imgproc.EncodeBase64PNG(subtracted)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "encoding failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"image": s})
+}
+
+// HandleAnalyzeHeatmap returns the JET-colourmap heat map of differences.
+// POST /api/analyze/heatmap
+func HandleAnalyzeHeatmap(c *gin.Context) {
+	if !state.Global.HasImages() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "images not ready"})
+		return
+	}
+	opts := parseDiffOpts(c)
+	before, after, _ := state.Global.AnalysisPair()
+	diff, _ := imgproc.ComputeDiffV2(before, after, opts)
+	heatmap := imgproc.JETColormap(diff)
+	s, err := imgproc.EncodeBase64PNG(heatmap)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "encoding failed"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"image": s})
+}
+
+// HandleAnalyzeCanny returns Canny edge detection on the diff map and contours
+// drawn on the after image. Canny thresholds are fixed at sensible defaults.
+// POST /api/analyze/canny
+func HandleAnalyzeCanny(c *gin.Context) {
+	if !state.Global.HasImages() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "images not ready"})
+		return
+	}
+	opts := parseDiffOpts(c)
+	before, after, _ := state.Global.AnalysisPair()
+	diff, thresh := imgproc.ComputeDiffV2(before, after, opts)
+
+	const cannyLow, cannyHigh = uint8(100), uint8(200)
+	edges := imgproc.CannyEdge(diff, cannyLow, cannyHigh)
+	contoured, _ := imgproc.DrawContours(after, thresh, [3]uint8{0, 255, 0})
+
+	images := map[string]string{}
+	if s, err := imgproc.EncodeBase64PNG(edges); err == nil {
+		images["edges"] = s
+	}
+	if s, err := imgproc.EncodeBase64PNG(contoured); err == nil {
+		images["contours"] = s
+	}
+	c.JSON(http.StatusOK, images)
 }
 
 // HandleWarp warps the raw stored before image using anchor point pairs.
@@ -294,6 +294,39 @@ func HandleImageAfter(c *gin.Context) {
 	(&png.Encoder{CompressionLevel: png.BestSpeed}).Encode(c.Writer, img) //nolint:errcheck
 }
 
+// parseDiffOpts extracts shared DiffOptions parameters from a form POST.
+func parseDiffOpts(c *gin.Context) imgproc.DiffOptions {
+	strength := parseIntDefault(c.PostForm("strength"), 60)
+	if strength < 0 || strength > 99 {
+		strength = 60
+	}
+	minRegion := parseIntDefault(c.PostForm("min_region"), 25)
+	if minRegion < 1 {
+		minRegion = 1
+	}
+	morphSize := parseIntDefault(c.PostForm("morph_size"), 5)
+	if morphSize < 1 {
+		morphSize = 1
+	}
+	closeSize := parseIntDefault(c.PostForm("close_size"), 3)
+	if closeSize < 1 {
+		closeSize = 1
+	}
+	preBlurSigma := parseFloatDefault(c.PostForm("pre_blur_sigma"), 1.5)
+	if preBlurSigma < 0 || preBlurSigma > 3.0 {
+		preBlurSigma = 1.5
+	}
+	normLuma := c.PostForm("normalize_luma") != "0"
+	return imgproc.DiffOptions{
+		Threshold:     uint8(strength),
+		MorphSize:     morphSize,
+		CloseSize:     closeSize,
+		MinRegion:     minRegion,
+		PreBlurSigma:  preBlurSigma,
+		NormalizeLuma: normLuma,
+	}
+}
+
 // decodeFormImage parses the multipart form and decodes the named image file.
 func decodeFormImage(c *gin.Context, field string) (image.Image, state.Dims, bool) {
 	if err := c.Request.ParseMultipartForm(64 << 20); err != nil {
@@ -325,3 +358,15 @@ func parseIntDefault(s string, def int) int {
 	}
 	return v
 }
+
+func parseFloatDefault(s string, def float64) float64 {
+	if s == "" {
+		return def
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return def
+	}
+	return v
+}
+

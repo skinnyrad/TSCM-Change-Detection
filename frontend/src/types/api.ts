@@ -1,5 +1,3 @@
-export type Method = 'basic' | 'subtraction' | 'threshold' | 'heatmap' | 'advanced';
-
 export interface AnchorPoint {
   x: number; // relative [0,1] within image display bounds
   y: number;
@@ -17,25 +15,27 @@ export interface AnalyzeStats {
   regions: number;
 }
 
-export interface AnalyzeImages {
-  diff_map?: string;
-  threshold_mask?: string;
-  highlight?: string;
-  subtraction?: string;
-  heatmap?: string;
-  edges?: string;
-  contours?: string;
-}
-
 export interface Dims {
   w: number;
   h: number;
 }
 
+// Response from POST /api/analyze (highlight only)
 export interface AnalyzeResponse {
   stats: AnalyzeStats;
-  images: AnalyzeImages;
+  images: { highlight?: string };
   before_dims: Dims;
   after_dims: Dims;
   resized: boolean;
+}
+
+// Response from POST /api/analyze/diff, /api/analyze/subtraction, /api/analyze/heatmap
+export interface AltImageResponse {
+  image: string;
+}
+
+// Response from POST /api/analyze/canny
+export interface CannyResponse {
+  edges?: string;
+  contours?: string;
 }
