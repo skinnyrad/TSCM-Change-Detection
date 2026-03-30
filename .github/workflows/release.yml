@@ -1,0 +1,112 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  # ── Step 1: Build the React frontend once ────────────────────────────────────
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install and build frontend
+        working-directory: frontend
+        run: bun install && bun run build
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+  # ── Step 2: Cross-compile and package for each target platform ───────────────
+  build:
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            os_name: linux
+            ext: ""
+          - goos: linux
+            goarch: arm64
+            os_name: linux
+            ext: ""
+          - goos: darwin
+            goarch: amd64
+            os_name: macos
+            ext: ""
+          - goos: darwin
+            goarch: arm64
+            os_name: macos
+            ext: ""
+          - goos: windows
+            goarch: amd64
+            os_name: windows
+            ext: .exe
+          - goos: windows
+            goarch: arm64
+            os_name: windows
+            ext: .exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: go build -ldflags="-s -w" -o tscm-change-detection${{ matrix.ext }} .
+
+      - name: Package into tar.gz
+        run: |
+          chmod +x tscm-change-detection${{ matrix.ext }}
+          tar -czf tscm-change-detection_${{ github.ref_name }}_${{ matrix.os_name }}_${{ matrix.goarch }}.tar.gz \
+            tscm-change-detection${{ matrix.ext }}
+
+      - name: Upload tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: tscm-change-detection_${{ github.ref_name }}_${{ matrix.os_name }}_${{ matrix.goarch }}
+          path: tscm-change-detection_${{ github.ref_name }}_${{ matrix.os_name }}_${{ matrix.goarch }}.tar.gz
+
+  # ── Step 3: Create GitHub Release and attach all tarballs ────────────────────
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all tarballs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tscm-change-detection_*
+          merge-multiple: true
+          path: release
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true

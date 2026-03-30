@@ -8,13 +8,63 @@ A web application for Technical Surveillance Countermeasures (TSCM) professional
 
 ## Installation
 
-Download the latest release binary and run it directly. No runtime dependencies required.
+Download the correct release archive for your platform from the [Releases](https://github.com/skinnyrad/tscm-change-detection/releases/latest) page. No runtime dependencies required — the binary is fully self-contained.
+
+| Platform | Architecture | File |
+|---|---|---|
+| Linux | x86-64 (most desktops/servers) | `tscm-change-detection_vX.X.X_linux_amd64.tar.gz` |
+| Linux | ARM64 (Raspberry Pi, ARM servers) | `tscm-change-detection_vX.X.X_linux_arm64.tar.gz` |
+| macOS | Apple Silicon (M1/M2/M3) | `tscm-change-detection_vX.X.X_macos_arm64.tar.gz` |
+| macOS | Intel | `tscm-change-detection_vX.X.X_macos_amd64.tar.gz` |
+| Windows | x86-64 | `tscm-change-detection_vX.X.X_windows_amd64.tar.gz` |
+| Windows | ARM64 | `tscm-change-detection_vX.X.X_windows_arm64.tar.gz` |
+
+### Linux
 
 ```bash
+tar -xzf tscm-change-detection_vX.X.X_linux_amd64.tar.gz
 ./tscm-change-detection
 ```
 
-The app opens at `http://localhost:8080`.
+The binary ships with the executable bit already set. Open `http://localhost:8080` in your browser.
+
+To make the binary available system-wide, move it to a directory on your `PATH`:
+
+```bash
+sudo mv tscm-change-detection /usr/local/bin/
+```
+
+### macOS
+
+```bash
+tar -xzf tscm-change-detection_vX.X.X_macos_arm64.tar.gz
+```
+
+If you are unsure which chip your Mac has, click the Apple menu → **About This Mac**. Use the `arm64` build for Apple Silicon (M1 or later) and `amd64` for Intel.
+
+Because the binary is not notarized, macOS Gatekeeper will block it on first run. Clear the quarantine flag before launching:
+
+```bash
+xattr -d com.apple.quarantine tscm-change-detection
+./tscm-change-detection
+```
+
+Open `http://localhost:8080` in your browser.
+
+### Windows
+
+Windows 10 (build 17063+) and Windows 11 include a built-in `tar` command. Open **Command Prompt** or **PowerShell** in the folder where you downloaded the archive:
+
+```powershell
+tar -xzf tscm-change-detection_vX.X.X_windows_amd64.tar.gz
+.\tscm-change-detection.exe
+```
+
+If you are on an ARM device (Surface Pro X, Snapdragon laptops), use the `windows_arm64` archive instead.
+
+Windows Defender SmartScreen may show a warning the first time you run the executable because it is not code-signed. Click **More info → Run anyway** to proceed.
+
+Open `http://localhost:8080` in your browser.
 
 ## Building from source
 
