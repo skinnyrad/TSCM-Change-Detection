@@ -4,15 +4,9 @@ A web application for Technical Surveillance Countermeasures (TSCM) professional
 
 **Stack:** Go (Gin) backend · React 19 + TypeScript frontend · MUI · Pure-Go image processing (no OpenCV)
 
-![Upload Screen](./img/main1.png)
-
-![Analysis Results](./img/main2.png)
-
-
+![Upload Screen](./img/upload.png)
 
 ## Installation
-
-### Option A — Run the pre-built binary
 
 Download the latest release binary and run it directly. No runtime dependencies required.
 
@@ -22,9 +16,7 @@ Download the latest release binary and run it directly. No runtime dependencies 
 
 The app opens at `http://localhost:8080`.
 
----
-
-### Option B — Build from source
+## Building from source
 
 **Prerequisites:** [Go 1.25+](https://go.dev/dl/) · [Bun](https://bun.sh)
 
@@ -55,29 +47,13 @@ The app opens at `http://localhost:8080`.
 
 The app opens at `http://localhost:8080`.
 
----
-
-### Development mode
-
-Run the backend and frontend separately with hot-reload:
-
-```bash
-# Terminal 1 — Go API on :8080
-go run .
-
-# Terminal 2 — React dev server on :3000 (proxies /api/* to Go)
-cd frontend && bun --hot src/index.ts
-```
-
-
-
 ## Usage
 
 Upload a **Before** and **After** image using the two panels at the top. Previews appear immediately. If the images differ in size, the Before image is automatically resized to match the After image for analysis.
 
 Once both images are uploaded, a **Transform button** (⇄) appears in the bottom-right corner. Click it to open the alignment dialog, where you can place up to 8 matching point pairs to perspective-warp the Before image onto the After image. This corrects for camera angle differences and reduces false positives. The button turns solid blue when an alignment is active.
 
-
+![Align](./img/align.png)
 
 ## Analysis Tools
 
@@ -89,58 +65,45 @@ Visually compare the two images side by side. Switch between three modes:
 - **Toggle** — click `Before`, `After`, or `↔` to flip between full-resolution images instantly
 - **Auto** — automatically flickers between Before and After at a speed controlled by the Speed slider (100 ms – 2 s per frame)
 
-![Image Comparison](./img/image-comparison.png)
-
-
+![Image Comparison](./img/compare.png)
 
 ### Tab 2 — Change Detection
 
-All methods display three live metrics — **Changed Area %**, **Changed Pixels**, and **Distinct Regions** — alongside the visual results. Results update automatically when the strength slider is adjusted.
+Displays a single result: the After image with detected changes highlighted in your chosen color. Results update automatically whenever any control is adjusted.
 
-#### Basic Difference
-Shows a grayscale difference map, a binary thresholded mask, and a red highlight overlay on the After image.
+**Primary controls:**
 
-![Basic Difference](./img/basic-difference.png)
+- **Detection Strength (5–100, default 75)** — threshold sensitivity. Lower values flag subtle changes; higher values reduce false positives.
+- **Noise Reduction (1–15, default 7×7)** — morphological opening kernel. Suppresses isolated noise pixels and compression artifacts before thresholding.
+- **Highlight Color** — five preset swatches: Red, Orange, Yellow, Cyan, Lime.
+- **Highlight Opacity (10–100%, default 55%)** — how strongly the highlight color overlays the After image.
 
-#### Heat Map
-Renders change intensity as a JET colormap (blue = low change, red = high change) alongside the red highlight overlay. Useful for gauging the magnitude of changes, not just their location.
+**Advanced Options & Stats** (collapsed by default):
 
-![Heat Map](./img/heat-map.png)
+- **Min Region Size** — discard detected blobs smaller than this many pixels, eliminating tiny spurious detections.
+- **Pre-blur (σ 0–4, default 2.0)** — Gaussian blur applied to both images before differencing. Smooths JPEG block artifacts and sub-pixel camera jitter. Set to 0 to disable.
+- **Fill Gaps (1–15, default 5×5)** — morphological closing kernel applied after noise reduction. Fills interior holes in detected regions so real objects appear as solid blobs.
+- **Normalize Lighting** — shifts each image's mean luminance to a common baseline before differencing, reducing false positives caused by global brightness changes between shots.
+- **Stats** — Changed Area %, Changed Pixels, and Distinct Regions for the current result.
 
-#### Image Subtraction
-Performs a pixel-wise float subtraction (After − Before), normalized to 0–255. Preserves gradient information rather than producing a binary result — useful for detecting subtle, gradual modifications.
+![Change Detection](./img/detection.png)
 
-![Image Subtraction](./img/image-subtraction.png)
+### Tab 3 — Alternate Analysis
 
-#### Threshold Detection
-Applies a user-defined strength threshold to the raw difference, showing only changes above that level alongside the highlight overlay.
+Runs four simultaneous visualizations using the same underlying diff pipeline, useful for characterizing the nature and severity of detected changes. No configuration required — results appear automatically once both images are uploaded.
 
-![Threshold Detection](./img/threshold-detection.png)
+- **Image Difference** — raw grayscale difference map showing per-pixel change magnitude.
+- **Channel Subtraction** — per-channel float subtraction (After − Before), normalized to 0–255. Preserves gradient information and color-channel asymmetry; useful for detecting subtle or gradual modifications.
+- **Change Intensity Heatmap** — JET colormap overlay (blue = low change, red = high change). Useful for assessing the magnitude and spatial distribution of changes.
+- **Canny Edge Detection** — edge detection run on the difference map, highlighting structural boundaries of changed regions.
 
-**Detection Strength slider (5–100, default 30):** applies to Basic Difference, Heat Map, and Threshold Detection.
-- Lower values → more sensitive, flags subtle changes
-- Higher values → fewer false positives, only significant changes
-
-
-
-### Tab 3 — Advanced Analysis
-
-Provides two simultaneous views for structural analysis of detected changes. Results update automatically as any slider is adjusted.
-
-- **Edge Detection** — runs Canny edge detection on the difference image. Canny Low (20–150) and High (50–300) thresholds are adjustable.
-- **Change Contours** — draws green contours around changed regions on the After image, with a region count displayed.
-
-![Advanced Analysis](./img/advanced-analysis.png)
-
-A **Detection Threshold** slider controls which pixels are considered changed for both views.
-
-
+![Alternate Analysis](./img/alternate.png)
 
 ## Best Practices
 
-- Use consistent lighting, camera position, and angle between shots
-- If photos were taken from slightly different positions or angles, use the **alignment tool** (⇄ FAB) to mark 4–8 matching landmarks before running analysis — this significantly reduces geometric false positives
-- Start with **Basic Difference** for an initial read, then refine strength
-- Use **Heat Map** to assess the severity and spread of changes
-- Use **Advanced Analysis** contours to identify and count distinct changed objects
-- If getting too many false positives, increase the strength threshold; if missing subtle changes, decrease it
+- Use consistent lighting, angle, and most importantly **lens position** between shots.
+- If photos were taken from slightly different positions or angles, use the **alignment tool** (⇄ FAB) to mark 4–8 matching landmarks before running analysis — this significantly reduces geometric false positives.
+- Enable **Normalize Lighting** when shots were taken under different ambient conditions.
+- Increase **Pre-blur** if JPEG compression artifacts or minor camera shake are producing false positives along high-contrast edges.
+- Use **Alternate Analysis** to cross-reference: the heatmap shows severity, the subtraction view reveals color-channel changes, and the edge map highlights structural boundaries.
+- If getting too many false positives, decrease Detection Strength and/or increase Noise Reduction.
