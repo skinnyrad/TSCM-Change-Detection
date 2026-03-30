@@ -25,6 +25,12 @@ The release binaries are not code-signed or notarized. On first run, modern macO
 
 ### macOS
 
+```bash
+tar -xzf tscm-change-detection_vX.X.X_macos_arm64.tar.gz
+```
+
+If you are unsure which chip your Mac has, click the Apple menu → **About This Mac**. Use the `arm64` build for Apple Silicon (M1 or later) and `amd64` for Intel.
+
 - If Finder prevents launching, clear the quarantine flag then run:
 
 ```bash
@@ -34,17 +40,16 @@ xattr -d com.apple.quarantine ./tscm-change-detection
 
 - If macOS still blocks the app, open System Settings → Privacy & Security (or System Preferences → Security & Privacy) and click "Open Anyway" next to the blocked app message. Alternatively, Control-click the app and choose "Open" to bypass Gatekeeper for that app.
 
-- Or, if using the tar archive:
-
-```bash
-tar -xzf tscm-change-detection_vX.X.X_macos_arm64.tar.gz
-```
-
-If you are unsure which chip your Mac has, click the Apple menu → **About This Mac**. Use the `arm64` build for Apple Silicon (M1 or later) and `amd64` for Intel.
-
 Open `http://localhost:8080` in your browser.
 
 ### Windows
+
+```powershell
+tar -xzf tscm-change-detection_vX.X.X_windows_amd64.tar.gz
+.\tscm-change-detection.exe
+```
+
+If you are on an ARM device, use the `windows_arm64` archive instead.
 
 - In PowerShell, unblock the file then run it:
 
@@ -54,15 +59,6 @@ Unblock-File -Path .\tscm-change-detection.exe
 ```
 
 - If Windows Defender SmartScreen warns: click "More info" then "Run anyway". You can also right-click the downloaded file, choose Properties, and check "Unblock" at the bottom of the General tab before running.
-
-- Or, if using the tar archive:
-
-```powershell
-tar -xzf tscm-change-detection_vX.X.X_windows_amd64.tar.gz
-.\tscm-change-detection.exe
-```
-
-If you are on an ARM device, use the `windows_arm64` archive instead.
 
 Open `http://localhost:8080` in your browser.
 
