@@ -19,6 +19,53 @@ Download the correct release archive for your platform from the [Releases](https
 | Windows | x86-64 | `tscm-change-detection_vX.X.X_windows_amd64.tar.gz` |
 | Windows | ARM64 | `tscm-change-detection_vX.X.X_windows_arm64.tar.gz` |
 
+Note on macOS and Windows blocking unsigned binaries
+
+The release binaries are not code-signed or notarized. On first run, modern macOS and Windows may block the executable. Use the steps below to allow the app to run.
+
+### macOS
+
+- If Finder prevents launching, clear the quarantine flag then run:
+
+```bash
+xattr -d com.apple.quarantine ./tscm-change-detection
+./tscm-change-detection
+```
+
+- If macOS still blocks the app, open System Settings → Privacy & Security (or System Preferences → Security & Privacy) and click "Open Anyway" next to the blocked app message. Alternatively, Control-click the app and choose "Open" to bypass Gatekeeper for that app.
+
+- Or, if using the tar archive:
+
+```bash
+tar -xzf tscm-change-detection_vX.X.X_macos_arm64.tar.gz
+```
+
+If you are unsure which chip your Mac has, click the Apple menu → **About This Mac**. Use the `arm64` build for Apple Silicon (M1 or later) and `amd64` for Intel.
+
+Open `http://localhost:8080` in your browser.
+
+### Windows
+
+- In PowerShell, unblock the file then run it:
+
+```powershell
+Unblock-File -Path .\tscm-change-detection.exe
+.\tscm-change-detection.exe
+```
+
+- If Windows Defender SmartScreen warns: click "More info" then "Run anyway". You can also right-click the downloaded file, choose Properties, and check "Unblock" at the bottom of the General tab before running.
+
+- Or, if using the tar archive:
+
+```powershell
+tar -xzf tscm-change-detection_vX.X.X_windows_amd64.tar.gz
+.\tscm-change-detection.exe
+```
+
+If you are on an ARM device, use the `windows_arm64` archive instead.
+
+Open `http://localhost:8080` in your browser.
+
 ### Linux
 
 ```bash
@@ -33,38 +80,6 @@ To make the binary available system-wide, move it to a directory on your `PATH`:
 ```bash
 sudo mv tscm-change-detection /usr/local/bin/
 ```
-
-### macOS
-
-```bash
-tar -xzf tscm-change-detection_vX.X.X_macos_arm64.tar.gz
-```
-
-If you are unsure which chip your Mac has, click the Apple menu → **About This Mac**. Use the `arm64` build for Apple Silicon (M1 or later) and `amd64` for Intel.
-
-Because the binary is not notarized, macOS Gatekeeper will block it on first run. Clear the quarantine flag before launching:
-
-```bash
-xattr -d com.apple.quarantine tscm-change-detection
-./tscm-change-detection
-```
-
-Open `http://localhost:8080` in your browser.
-
-### Windows
-
-Windows 10 (build 17063+) and Windows 11 include a built-in `tar` command. Open **Command Prompt** or **PowerShell** in the folder where you downloaded the archive:
-
-```powershell
-tar -xzf tscm-change-detection_vX.X.X_windows_amd64.tar.gz
-.\tscm-change-detection.exe
-```
-
-If you are on an ARM device (Surface Pro X, Snapdragon laptops), use the `windows_arm64` archive instead.
-
-Windows Defender SmartScreen may show a warning the first time you run the executable because it is not code-signed. Click **More info → Run anyway** to proceed.
-
-Open `http://localhost:8080` in your browser.
 
 ## Building from source
 
