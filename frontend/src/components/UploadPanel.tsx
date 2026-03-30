@@ -39,7 +39,7 @@ function DropZone({ label, file, displayUrl, onFile }: DropZoneProps) {
       <input
         ref={inputRef}
         type="file"
-        accept="image/jpeg,image/png,image/heic,image/heif,.heic,.heif"
+        accept="image/jpeg,image/png"
         style={{ display: 'none' }}
         onChange={(e) => {
           const f = e.target.files?.[0];
@@ -71,7 +71,7 @@ function DropZone({ label, file, displayUrl, onFile }: DropZoneProps) {
             Choose Image
           </Button>
           <Typography variant="caption" color="text.disabled">
-            JPG, PNG, or HEIC
+            JPG or PNG
           </Typography>
         </>
       )}

@@ -10,7 +10,6 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	_ "github.com/jdeng/goheif"
 	"github.com/skinnyrad/tscm-change-detection/internal/imgproc"
 	"github.com/skinnyrad/tscm-change-detection/internal/state"
 )
