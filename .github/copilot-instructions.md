@@ -1,59 +1,85 @@
-# Copilot instructions for TSCM-Change-Detection
+# Copilot Instructions for TSCM-Change-Detection
 
-## Purpose
+Purpose: provide repository-specific instructions so future Copilot sessions can act confidently.
 
-Streamlit-based image change-detection tool for TSCM (Technical Surveillance Countermeasures) analysts. Compares Before/After photos to identify modifications or anomalies in a surveillance area.
+---
 
-## Build / Run / Test / Lint
+Build, test, and lint commands
 
-- Setup environment: `python3 -m venv venv && source venv/bin/activate`
-- Install deps: `pip install -r requirements.txt`
-- Run the app: `streamlit run app.py`
-- Tests: No test suite yet. If pytest tests are added, run with:
-  - `pytest tests/test_filename.py::test_name` (single test)
-  - `pytest -k <expr>` (subset)
-- Linting: No linter or pre-commit configuration is present.
+- Backend (Go):
+  - Requires Go 1.25+ (see go.mod).
+  - Build production binary (embeds frontend/dist):
+    - go build -o tscm-change-detection .
+  - Run locally (single command):
+    - go run .
+  - Run a single Go test (if tests are added):
+    - go test -run ^TestName$ ./path/to/package
+  - Run full test suite (if any):
+    - go test ./...
+  - Quick vet/format:
+    - go vet ./...
+    - go fmt ./...
 
-## Repository layout
+- Frontend (React + Bun):
+  - Install deps and build (required before go build to embed fresh UI):
+    - cd frontend && bun install && bun run build
+  - Dev (hot-reload):
+    - cd frontend && bun run dev
+    - Backend in dev: go run . (backend listens on :8080, frontend dev server uses :3000)
 
-```
-app.py              # Single-file Streamlit app — all UI and analysis logic
-requirements.txt    # Runtime deps: Pillow, streamlit, opencv-python, numpy, streamlit-image-comparison==0.0.4
-README.md           # User-facing docs with screenshots
-img/                # Screenshot assets referenced by README
-test-images/        # Sample before/after image pairs for manual testing
-.github/            # GitHub config (this file)
-```
+- Notes about embedding: the Go binary uses `//go:embed all:frontend/dist`. Always run the frontend build before `go build` if making UI changes.
 
-## Architecture
+- Python (optional): requirements.txt exists (Pillow, streamlit, OpenCV, numpy). These appear to be for auxiliary scripts/notebooks — not required for the Go+React app.
 
-Single-process Streamlit application (`app.py`):
+---
 
-1. **Image upload** — two `file_uploader` widgets accept jpg/jpeg/png Before and After images.
-2. **Loading** — `load_image()` opens via PIL, converts to RGB, returns a numpy array.
-3. **Alignment** — `align_images()` resizes the Before image to the After image's dimensions using `INTER_LANCZOS4`.
-4. **Analysis functions** (pure numpy/OpenCV, no Streamlit dependency):
-   - `compute_difference(img1, img2, threshold)` → grayscale absolute diff + binary threshold (with 5×5 morphological open to reduce noise).
-   - `apply_image_subtraction(img1, img2)` → float subtraction normalized to 0–255.
-   - `diff_to_heatmap(diff_gray)` → JET colormap (BGR→RGB converted).
-   - `highlight_changes(img2, thresh)` → red overlay blended onto After image.
-   - `draw_contours_on(img, thresh)` → green contours via `findContours(RETR_EXTERNAL)`.
-   - `change_stats(thresh)` → dict with `pct`, `changed_px`, `regions`.
-5. **UI** — `main()` wires the above into three Streamlit tabs:
-   - **Image Comparison** — slider (via `streamlit-image-comparison`) or toggle mode.
-   - **Change Detection** — four methods (Basic Difference, Image Subtraction, Threshold Detection, Heat Map) with live metrics.
-   - **Advanced Analysis** — Canny edge detection on diff + contour overlay with adjustable thresholds.
+High-level architecture (big picture)
 
-## Key conventions
+- Root Go service (main.go)
+  - Uses Gin (HTTP router), CORS configured to allow http://localhost:3000 for frontend dev.
+  - Exposes API under /api with handlers implemented in internal/api.
+  - Embeds frontend/dist into the binary and serves the SPA as static files; SPA fallback serves index.html for unknown routes.
 
-- **Single-file app**: all code lives in `app.py`. Changes to behavior almost always mean editing this file.
-- **Color space**: PIL→numpy produces RGB arrays. OpenCV colormap outputs (BGR) are explicitly converted to RGB before display.
-- **Alignment rule**: Before image is always resized to match After image dimensions — never the reverse.
-- **Default sensitivity**: 30 for all threshold-based methods; UI slider range is 5–100.
-- **Session state keys**: `show_after`, `adv_sens`, `canny_low`, `canny_high`.
+- internal/
+  - api: HTTP handler layer (endpoints wired in main.go). Key handlers (as named in main.go):
+    - HandleUploadBefore, HandleUploadAfter — receive uploaded images
+    - HandleAnalyze — perform analysis operations
+    - HandleWarp, HandleClearWarp — alignment/warp control
+    - HandleImageBefore, HandleImageAfter — serve the stored images
+  - imgproc: image processing algorithms (pure-Go; no OpenCV runtime dependency for the Go server)
+  - state: storage/state management for uploads/warp points (in-memory/file-backed as implemented)
 
-## When editing or extending
+- frontend/
+  - React + TypeScript (React 19). Uses MUI for UI components and Bun as the dev/build tool.
+  - Build output placed in frontend/dist and embedded by the Go server.
+  - Dev: Bun hot-reload runs on :3000; backend proxies /api/* (CORS allowance already present in main.go).
 
-- Keep image-processing logic in small pure functions that accept/return numpy arrays. The `main()` function should remain a thin UI wiring layer.
-- If adding tests, target the pure analysis functions (`compute_difference`, `apply_image_subtraction`, etc.) so tests run without Streamlit.
-- Update `README.md` if adding new analysis tabs or changing the UI structure — it documents each tab with screenshots.
+- Data flow summary:
+  1. User uploads Before and After images in the SPA.
+  2. Frontend POSTs to /api/upload/before and /api/upload/after.
+  3. Backend stores images and exposes them at /api/image/before and /api/image/after.
+  4. Frontend requests /api/analyze to run image-difference algorithms in imgproc; results returned as JSON for visualization.
+  5. If needed, frontend can POST warp control points to /api/warp and /api/clear-warp.
+
+---
+
+Key conventions and repository-specific gotchas
+
+- Frontend embedding: building the frontend is a required pre-step for creating an up-to-date production binary. The server embeds frontend/dist at compile time.
+
+- CORS/dev proxy: main.go explicitly allows http://localhost:3000. When running the frontend dev server, keep it on port 3000 or update the AllowOrigins config.
+
+- Handler naming: API handlers follow the `HandleXxx` naming in internal/api and are mounted under /api in main.go. Use those names when searching for behavior.
+
+- No-opencv runtime for server: image processing in the Go server is implemented in Go (bild, golang.org/x/image, etc.). The presence of opencv-python in requirements.txt is for the Python tooling, not the Go server.
+
+- Bun usage: frontend build and dev commands use Bun. The package.json defines `dev` and `build` scripts; prefer `bun run build` for production output.
+
+- Ports and addresses:
+  - Backend default: :8080 (see main.go)
+  - Frontend dev server: :3000 (CORS allowed)
+
+- Common quick searches for Copilot prompts:
+  - Where API endpoints are wired: main.go lines that call api.Handle*
+  - Image processing implementations: internal/imgproc
+  - State management: internal/state
