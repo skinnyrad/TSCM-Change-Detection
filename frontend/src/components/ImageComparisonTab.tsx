@@ -76,13 +76,20 @@ function ComparisonSlider({ beforeUrl, afterUrl }: ComparisonSliderProps) {
         position: 'relative',
         overflow: 'hidden',
         borderRadius: 1,
+        width: 'fit-content',
+        maxWidth: 'calc(100% - 24px)',
+        marginInline: 'auto',
         userSelect: 'none',
         touchAction: 'none',
         cursor: 'col-resize',
       }}
     >
       {/* Before image — in normal flow, establishes container height */}
-      <img src={beforeUrl} alt="Before" style={{ width: '100%', height: 'auto', display: 'block' }} />
+      <img
+        src={beforeUrl}
+        alt="Before"
+        style={{ width: 'auto', maxWidth: '100%', height: '90vh', display: 'block' }}
+      />
 
       {/* After image — same size, clipped to show only the right portion */}
       <img
@@ -157,18 +164,34 @@ interface StackedImagesProps {
 
 function StackedImages({ beforeUrl, afterUrl, showAfter }: StackedImagesProps) {
   return (
-    <Box sx={{ position: 'relative' }}>
+    <Box sx={{ position: 'relative', width: 'fit-content', maxWidth: 'calc(100% - 24px)', marginInline: 'auto' }}>
       <Box
         component="img"
         src={beforeUrl}
         alt="Before"
-        sx={{ width: '100%', borderRadius: 1, display: 'block', visibility: showAfter ? 'hidden' : 'visible' }}
+        sx={{
+          width: 'auto',
+          maxWidth: '100%',
+          height: '90vh',
+          borderRadius: 1,
+          display: 'block',
+          visibility: showAfter ? 'hidden' : 'visible',
+        }}
       />
       <Box
         component="img"
         src={afterUrl}
         alt="After"
-        sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 1, display: 'block', visibility: showAfter ? 'visible' : 'hidden' }}
+        sx={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          borderRadius: 1,
+          display: 'block',
+          visibility: showAfter ? 'visible' : 'hidden',
+        }}
       />
     </Box>
   );

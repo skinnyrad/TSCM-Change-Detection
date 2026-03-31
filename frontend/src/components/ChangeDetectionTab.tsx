@@ -147,7 +147,7 @@ export function ChangeDetectionTab({ ready, imageKey }: ChangeDetectionTabProps)
 
       {/* Result image */}
       {data?.images?.highlight && (
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
           <ResultImage src={data.images.highlight} caption="Changes Highlighted on After" />
         </Box>
       )}
