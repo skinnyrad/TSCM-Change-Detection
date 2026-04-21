@@ -43,7 +43,10 @@ xattr -d com.apple.quarantine ./tscm-change-detection
 Open `http://localhost:8080` in your browser.
 
 ### Windows
+#### GUI Based Install
+After downloading the tscm-change-detection_vX.X.X_windows_aXX64.tar.gz file, right click on it and click Extract All. Next, click the Extract button.
 
+#### Powershell based Install
 ```powershell
 tar -xzf tscm-change-detection_vX.X.X_windows_amd64.tar.gz
 .\tscm-change-detection.exe
@@ -51,15 +54,17 @@ tar -xzf tscm-change-detection_vX.X.X_windows_amd64.tar.gz
 
 If you are on an ARM device, use the `windows_arm64` archive instead.
 
-- In PowerShell, unblock the file then run it:
+#### Running
+Double click on the tscm-change-detection.exe file that was extracted. A command window will appear. Open `http://localhost:8080` in your browser.
+
+If Windows Defender SmartScreen warns: click "More info" then "Run anyway". You can also right-click the downloaded file, choose Properties, and check "Unblock" at the bottom of the General tab before running.
+
+If using PowerShell, unblock the file then run it:
 
 ```powershell
 Unblock-File -Path .\tscm-change-detection.exe
 .\tscm-change-detection.exe
 ```
-
-- If Windows Defender SmartScreen warns: click "More info" then "Run anyway". You can also right-click the downloaded file, choose Properties, and check "Unblock" at the bottom of the General tab before running.
-
 Open `http://localhost:8080` in your browser.
 
 ### Linux
