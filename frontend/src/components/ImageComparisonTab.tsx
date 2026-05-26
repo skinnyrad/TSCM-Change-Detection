@@ -20,9 +20,12 @@ interface ComparisonSliderProps {
   afterUrl: string;
 }
 
+const COMPARISON_IMAGE_MAX_HEIGHT = 'min(90vh, calc(100vh - 220px))';
+
 function ComparisonSlider({ beforeUrl, afterUrl }: ComparisonSliderProps) {
   const [sliderX, setSliderX] = useState(50);
   const [gripY, setGripY] = useState(50);
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Dragging anywhere on the container (except the grip) moves the divider.
@@ -88,7 +91,19 @@ function ComparisonSlider({ beforeUrl, afterUrl }: ComparisonSliderProps) {
       <img
         src={beforeUrl}
         alt="Before"
-        style={{ width: 'auto', maxWidth: '100%', height: '90vh', display: 'block' }}
+        onLoad={(e) => {
+          const { naturalWidth, naturalHeight } = e.currentTarget;
+          if (naturalWidth > 0 && naturalHeight > 0) {
+            setAspectRatio(naturalWidth / naturalHeight);
+          }
+        }}
+        style={{
+          width: aspectRatio ? `min(calc(${COMPARISON_IMAGE_MAX_HEIGHT} * ${aspectRatio}), 100%)` : '100%',
+          maxWidth: '100%',
+          height: 'auto',
+          maxHeight: COMPARISON_IMAGE_MAX_HEIGHT,
+          display: 'block',
+        }}
       />
 
       {/* After image — same size, clipped to show only the right portion */}
@@ -163,16 +178,25 @@ interface StackedImagesProps {
 }
 
 function StackedImages({ beforeUrl, afterUrl, showAfter }: StackedImagesProps) {
+  const [aspectRatio, setAspectRatio] = useState<number | null>(null);
+
   return (
     <Box sx={{ position: 'relative', width: 'fit-content', maxWidth: 'calc(100% - 24px)', marginInline: 'auto' }}>
       <Box
         component="img"
         src={beforeUrl}
         alt="Before"
+        onLoad={(e) => {
+          const { naturalWidth, naturalHeight } = e.currentTarget;
+          if (naturalWidth > 0 && naturalHeight > 0) {
+            setAspectRatio(naturalWidth / naturalHeight);
+          }
+        }}
         sx={{
-          width: 'auto',
+          width: aspectRatio ? `min(calc(${COMPARISON_IMAGE_MAX_HEIGHT} * ${aspectRatio}), 100%)` : '100%',
           maxWidth: '100%',
-          height: '90vh',
+          height: 'auto',
+          maxHeight: COMPARISON_IMAGE_MAX_HEIGHT,
           borderRadius: 1,
           display: 'block',
           visibility: showAfter ? 'hidden' : 'visible',
