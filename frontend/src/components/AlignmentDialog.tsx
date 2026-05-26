@@ -191,23 +191,6 @@ export function AlignmentDialog({ open, beforeUrl, afterUrl, beforeDims, afterDi
             <Typography variant="subtitle1" fontWeight={700}>
               {showPreview ? 'Alignment Preview' : 'Align Images'}
             </Typography>
-            <Chip
-              label={`${completePairs} / ${pairs.length} pairs complete`}
-              color={allComplete ? 'success' : 'default'}
-              size="small"
-              sx={{ alignSelf: 'flex-start' }}
-            />
-            {!showPreview && (
-              pendingSide !== null ? (
-                <Alert severity="info" sx={{ py: 0.5, px: 1.5 }}>
-                  Click <strong>{mainLabel}</strong> to place point {pairs[pendingIdx]?.id}
-                </Alert>
-              ) : (
-                <Alert severity="success" sx={{ py: 0.5, px: 1.5 }}>
-                  All pairs placed
-                </Alert>
-              )
-            )}
           </Box>
 
           <Divider />
