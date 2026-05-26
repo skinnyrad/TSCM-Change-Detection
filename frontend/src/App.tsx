@@ -77,6 +77,7 @@ export function App() {
   const handleAligned = (url: string) => {
     if (warpedUrl) URL.revokeObjectURL(warpedUrl);
     setWarpedUrl(url);
+    setActiveTab(0);
   };
 
   const bothSelected = before !== null && after !== null;
