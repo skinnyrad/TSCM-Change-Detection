@@ -20,6 +20,19 @@ export interface Dims {
   h: number;
 }
 
+export interface AutoWarpPairResponse {
+  src: [number, number];
+  dst: [number, number];
+  confidence: number;
+}
+
+export interface AutoWarpResponse {
+  pairs: AutoWarpPairResponse[];
+  confidence: number;
+  match_count: number;
+  inlier_count: number;
+}
+
 // Response from POST /api/analyze (highlight only)
 export interface AnalyzeResponse {
   stats: AnalyzeStats;

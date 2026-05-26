@@ -9,11 +9,13 @@ import DialogContent from '@mui/material/DialogContent';
 import Divider from '@mui/material/Divider';
 import Typography from '@mui/material/Typography';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
+import AutoFixHighRoundedIcon from '@mui/icons-material/AutoFixHighRounded';
 import ArrowBackRoundedIcon from '@mui/icons-material/ArrowBackRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import CheckRoundedIcon from '@mui/icons-material/CheckRounded';
 import RadioButtonUncheckedRoundedIcon from '@mui/icons-material/RadioButtonUncheckedRounded';
 import { AlignableImage, PAIR_COLORS } from './AlignableImage';
+import { useAutoWarp } from '../hooks/useAutoWarp';
 import { useWarp } from '../hooks/useWarp';
 import type { PointPair, Dims } from '../types/api';
 
@@ -35,12 +37,15 @@ export function AlignmentDialog({ open, beforeUrl, afterUrl, beforeDims, afterDi
     [1, 2, 3, 4].map(id => ({ id, src: null, dst: null }))
   );
   const [warpedUrl, setWarpedUrl] = useState<string | null>(null);
+  const [autoSummary, setAutoSummary] = useState<string | null>(null);
   const { warp, loading, error } = useWarp();
+  const { autoWarp, loading: autoLoading, error: autoError } = useAutoWarp();
 
   useEffect(() => {
     if (open) {
       setPairs([1, 2, 3, 4].map(id => ({ id, src: null, dst: null })));
       setWarpedUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
+      setAutoSummary(null);
     }
   }, [open]);
 
@@ -71,6 +76,22 @@ export function AlignmentDialog({ open, beforeUrl, afterUrl, beforeDims, afterDi
   const handleApply = async () => {
     const url = await warp(pairs, beforeDims, afterDims);
     if (url) setWarpedUrl(url);
+  };
+
+  const handleAutoAlign = async () => {
+    if (pairs.some(pair => pair.src || pair.dst) && !window.confirm('Replace the current alignment points with auto-detected points?')) {
+      return;
+    }
+
+    const result = await autoWarp(beforeDims, afterDims);
+    if (!result) return;
+
+    if (warpedUrl) {
+      URL.revokeObjectURL(warpedUrl);
+      setWarpedUrl(null);
+    }
+    setPairs(result.pairs);
+    setAutoSummary(`Auto-detected ${result.pairs.length} pairs from ${result.inlierCount}/${result.matchCount} matches. Confidence ${Math.round(result.confidence * 100)}%.`);
   };
 
   const handleConfirm = () => {
@@ -257,6 +278,8 @@ export function AlignmentDialog({ open, beforeUrl, afterUrl, beforeDims, afterDi
 
           {/* Error */}
           {error && <Alert severity="error" sx={{ py: 0.5 }}>{error}</Alert>}
+          {autoError && <Alert severity="error" sx={{ py: 0.5 }}>{autoError}</Alert>}
+          {autoSummary && !showPreview && <Alert severity="success" sx={{ py: 0.5 }}>{autoSummary}</Alert>}
 
           <Divider />
 
@@ -286,9 +309,21 @@ export function AlignmentDialog({ open, beforeUrl, afterUrl, beforeDims, afterDi
               <Button
                 fullWidth
                 disabled={pairs.every(p => !p.src && !p.dst)}
-                onClick={() => setPairs([1, 2, 3, 4].map(id => ({ id, src: null, dst: null })))}
+                onClick={() => {
+                  setPairs([1, 2, 3, 4].map(id => ({ id, src: null, dst: null })));
+                  setAutoSummary(null);
+                }}
               >
                 Clear All
+              </Button>
+              <Button
+                fullWidth
+                variant="outlined"
+                onClick={handleAutoAlign}
+                disabled={loading || autoLoading}
+                startIcon={autoLoading ? <CircularProgress size={16} color="inherit" /> : <AutoFixHighRoundedIcon />}
+              >
+                {autoLoading ? 'Finding points…' : 'Auto Align'}
               </Button>
               {pairs.length < MAX_PAIRS && allComplete && (
                 <Button fullWidth startIcon={<AddRoundedIcon />} onClick={addPair}>

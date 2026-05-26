@@ -32,6 +32,19 @@ type analyzeResponse struct {
 	Resized    bool              `json:"resized"`
 }
 
+type autoWarpPairResponse struct {
+	Src        [2]float64 `json:"src"`
+	Dst        [2]float64 `json:"dst"`
+	Confidence float64    `json:"confidence"`
+}
+
+type autoWarpResponse struct {
+	Pairs       []autoWarpPairResponse `json:"pairs"`
+	Confidence  float64                `json:"confidence"`
+	MatchCount  int                    `json:"match_count"`
+	InlierCount int                    `json:"inlier_count"`
+}
+
 // HandleUploadBefore decodes and stores the before image, then triggers
 // alignment if the after image is already present.
 // POST /api/upload/before — multipart/form-data: image
@@ -258,6 +271,37 @@ func HandleWarp(c *gin.Context) {
 
 	// Store downsampled version so it matches the analysis-resolution aligned pair.
 	state.Global.SetWarpedBefore(imgproc.DownsampleNRGBA(warped, imgproc.MaxAnalysisDim))
+}
+
+// HandleAutoWarp returns candidate correspondence pairs for one-click alignment review.
+// POST /api/auto-warp
+func HandleAutoWarp(c *gin.Context) {
+	if !state.Global.HasImages() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "images not ready — upload both before and after first"})
+		return
+	}
+
+	result, err := imgproc.AutoDetectHomography(state.Global.RawBefore(), state.Global.RawAfter())
+	if err != nil {
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": err.Error()})
+		return
+	}
+
+	pairs := make([]autoWarpPairResponse, 0, len(result.Pairs))
+	for _, pair := range result.Pairs {
+		pairs = append(pairs, autoWarpPairResponse{
+			Src:        [2]float64{pair.Src.X, pair.Src.Y},
+			Dst:        [2]float64{pair.Dst.X, pair.Dst.Y},
+			Confidence: pair.Score,
+		})
+	}
+
+	c.JSON(http.StatusOK, autoWarpResponse{
+		Pairs:       pairs,
+		Confidence:  result.Confidence,
+		MatchCount:  result.MatchCount,
+		InlierCount: result.InlierCount,
+	})
 }
 
 // HandleClearWarp removes the stored warp so analysis reverts to alignedBefore.

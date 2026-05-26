@@ -35,6 +35,7 @@ func main() {
 	apiGroup.POST("/analyze/subtraction", api.HandleAnalyzeSubtraction)
 	apiGroup.POST("/analyze/heatmap", api.HandleAnalyzeHeatmap)
 	apiGroup.POST("/analyze/canny", api.HandleAnalyzeCanny)
+	apiGroup.POST("/auto-warp", api.HandleAutoWarp)
 	apiGroup.POST("/warp", api.HandleWarp)
 	apiGroup.POST("/clear-warp", api.HandleClearWarp)
 	apiGroup.GET("/image/before", api.HandleImageBefore)
