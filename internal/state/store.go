@@ -50,6 +50,9 @@ type Store struct {
 	generation atomic.Int64
 }
 
+// Batch returns the batch-mode store (many images of one scene).
+func (s *Store) Batch() *BatchStore { return Batch }
+
 // Global is the single shared store for the process.
 var Global = &Store{settings: Settings{AutoRegister: true}}
 

@@ -232,3 +232,48 @@ func TestChangeStatsAndNormalizeHeat(t *testing.T) {
 		t.Fatal("heat should stretch to full range")
 	}
 }
+
+func TestTiePointsAreSpreadAndExact(t *testing.T) {
+	src := textured(900, 700, 11)
+	before, after, htrue := synthPair(src, rand.New(rand.NewSource(3)))
+	res, err := AutoDetectHomography(before, after)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w, h := before.Bounds().Dx(), before.Bounds().Dy()
+	var s, d []Point
+	for _, p := range res.Pairs {
+		s, d = append(s, p.Src), append(d, p.Dst)
+	}
+	if sp := spreadScore(s, w, h); sp < 0.75 {
+		t.Fatalf("tie points cover only %.2f of the grid", sp)
+	}
+	hp, err := computeHomography(s, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := homographyError(hp, htrue, w, h); e > 1 {
+		t.Fatalf("tie-point homography error %.2f px", e)
+	}
+}
+
+func TestRegisterTransformMatchesWarp(t *testing.T) {
+	src := textured(900, 700, 12)
+	before, after, _ := synthPair(src, rand.New(rand.NewSource(5)))
+	al := RegisterPair(before, after, true)
+	if !al.TransformOK || !al.Reg.Applied {
+		t.Fatalf("registration: %+v", al.Reg)
+	}
+	// Re-warping the original with the reported transform must reproduce Before.
+	re, _ := WarpHomography(before, al.Transform, al.After.Bounds().Dx(), al.After.Bounds().Dy())
+	var diff, n float64
+	for y := 50; y < al.After.Bounds().Dy()-50; y += 7 {
+		for x := 50; x < al.After.Bounds().Dx()-50; x += 7 {
+			diff += math.Abs(float64(re.NRGBAAt(x, y).G) - float64(al.Before.NRGBAAt(x, y).G))
+			n++
+		}
+	}
+	if diff/n > 2 {
+		t.Fatalf("transform re-warp differs by %.2f on average", diff/n)
+	}
+}

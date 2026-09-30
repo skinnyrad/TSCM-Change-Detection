@@ -293,3 +293,8 @@ func bilinearSample(img *image.NRGBA, x, y float64) color.NRGBA {
 		A: 255,
 	}
 }
+
+// ComposeHomography returns a·b·c (apply c first, then b, then a).
+func ComposeHomography(a, b, c [9]float64) [9]float64 {
+	return [9]float64(mat3Mul(mat3Mul(mat3(a), mat3(b)), mat3(c)))
+}

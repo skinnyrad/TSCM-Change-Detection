@@ -39,6 +39,13 @@ func main() {
 	apiGroup.POST("/warp", api.HandleWarp)
 	apiGroup.POST("/clear-warp", api.HandleClearWarp)
 	apiGroup.GET("/image/before", api.HandleImageBefore)
+	apiGroup.GET("/batch", api.HandleBatchStatus)
+	apiGroup.POST("/batch/images", api.HandleBatchUpload)
+	apiGroup.POST("/batch/clear", api.HandleBatchClear)
+	apiGroup.POST("/batch/analyze", api.HandleBatchAnalyze)
+	apiGroup.GET("/batch/results", api.HandleBatchResults)
+	apiGroup.GET("/batch/image/:id", api.HandleBatchImage)
+	apiGroup.GET("/batch/reference", api.HandleBatchReference)
 	apiGroup.GET("/image/after", api.HandleImageAfter)
 
 	// Serve embedded React frontend for all other routes (SPA fallback)

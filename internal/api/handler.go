@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"image"
 	_ "image/jpeg"
 	"image/png"
@@ -468,25 +469,33 @@ func decodeFormImage(c *gin.Context, field string) (image.Image, state.Dims, boo
 		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read upload: " + err.Error()})
 		return nil, state.Dims{}, false
 	}
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	img, dims, status, err := decodeImageBytes(data)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to decode image: " + err.Error()})
+		c.JSON(status, gin.H{"error": err.Error()})
 		return nil, state.Dims{}, false
 	}
+	return img, dims, true
+}
+
+// decodeImageBytes rejects absurd dimensions before decoding, decodes the
+// image and applies any EXIF rotation. On failure it returns an HTTP status.
+func decodeImageBytes(data []byte) (image.Image, state.Dims, int, error) {
+	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return nil, state.Dims{}, http.StatusBadRequest, fmt.Errorf("failed to decode image: %w", err)
+	}
 	if float64(cfg.Width)*float64(cfg.Height) > maxUploadPixels {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": "image is too large (over 120 megapixels)"})
-		return nil, state.Dims{}, false
+		return nil, state.Dims{}, http.StatusRequestEntityTooLarge, fmt.Errorf("image is too large (over 120 megapixels)")
 	}
 	img, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to decode image: " + err.Error()})
-		return nil, state.Dims{}, false
+		return nil, state.Dims{}, http.StatusBadRequest, fmt.Errorf("failed to decode image: %w", err)
 	}
 	if o := imgproc.ExifOrientation(data); o > 1 {
 		img = imgproc.ApplyOrientation(imgproc.ToNRGBA(img), o)
 	}
 	b := img.Bounds()
-	return img, state.Dims{W: b.Dx(), H: b.Dy()}, true
+	return img, state.Dims{W: b.Dx(), H: b.Dy()}, http.StatusOK, nil
 }
 
 func clampInt(v, lo, hi int) int {

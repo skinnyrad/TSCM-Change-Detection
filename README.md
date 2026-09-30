@@ -121,7 +121,7 @@ Both photos are **automatically aligned** on upload: the tool matches features b
 
 For extra confidence, use **Add extra baseline photo** to upload more "Before" shots of the same spot. They are combined (per-pixel median) and the natural variation between them is subtracted, so normally-varying areas stop triggering detections.
 
-Once both images are uploaded, a **Transform button** (⇄) appears in the bottom-right corner. Click it to open the alignment dialog, where you can place up to 8 matching point pairs to perspective-warp the Before image onto the After image. This corrects for camera angle differences and reduces false positives. The button turns solid blue when an alignment is active.
+Once both images are uploaded, a **Transform button** (⇄) appears in the bottom-right corner. **Auto Align** in that dialog proposes 8 tie points spread around the frame on stable structure (corners of walls, cabinets, door frames), positioned from the full automatic fit; adjust any of them before applying. Click it to open the alignment dialog, where you can place up to 8 matching point pairs to perspective-warp the Before image onto the After image. This corrects for camera angle differences and reduces false positives. The button turns solid blue when an alignment is active.
 
 ![Align](./img/align.png)
 
@@ -178,6 +178,18 @@ Runs four visualizations from a single pass of the same diff pipeline (and the s
 - **Canny Edge Detection** — edge detection run on the difference map, highlighting structural boundaries of changed regions.
 
 ![Alternate Analysis](./img/alternate.png)
+
+## Batch Anomalies (many photos of one scene)
+
+Switch to **Batch anomalies** in the top-right corner. Drop in tens to hundreds of photos of the **same scene** (or choose a folder), then click **Find anomalies**. The tool aligns every shot to a typical reference shot, learns what the scene normally looks like from the shots that agree with each other (the "golden set"), and flags the shots that differ, with a heat map and boxes showing where.
+
+- **Strictness** — lower flags more images; results re-classify instantly without re-running.
+- **Score strip** — every image as a dot, most unusual first; click one to inspect.
+- **Inspector** — the shot aligned to the scene, with heat overlay and numbered regions. `←`/`→` step between images; in fullscreen, `←`/`→` flip between the shot and the golden reference.
+- **Export report** — a self-contained HTML report with the golden reference and every anomalous shot annotated.
+- Shots that can't be aligned (a different position or a different scene) are marked **unaligned**; being unalignable is itself unusual.
+
+Detection covers both compact objects and thin structures such as cables or wires. Blown-out highlights (lamps, glare) are ignored. Up to 1000 images per batch.
 
 ## Best Practices
 

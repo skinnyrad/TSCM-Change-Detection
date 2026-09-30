@@ -94,3 +94,66 @@ export interface AlternateResponse {
 
 /** A rectangle in fractions (0–1) of the image: [x0, y0, x1, y1]. */
 export type IgnoreRect = [number, number, number, number];
+
+// ─── Batch mode ──────────────────────────────────────────────────────────────
+
+export interface BatchItem {
+  id: string;
+  name: string;
+  w: number;
+  h: number;
+}
+
+export interface BatchJob {
+  state: 'idle' | 'running' | 'done' | 'error';
+  done: number;
+  total: number;
+  error?: string;
+  duration_s: number;
+}
+
+export interface BatchStatus {
+  items: BatchItem[];
+  job: BatchJob;
+  has_results: boolean;
+}
+
+export interface BatchRegion {
+  rank: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  area_pct: number;
+  score: number;
+}
+
+export interface BatchImageResult {
+  id: string;
+  name: string;
+  /** Peak blob-filtered per-pixel z (how strongly the worst area deviates from the golden set). */
+  score: number;
+  z: number;
+  anomaly: boolean;
+  golden: boolean;
+  registered: boolean;
+  anchor: boolean;
+  message: string;
+  regions: BatchRegion[];
+}
+
+export interface BatchResults {
+  images: BatchImageResult[];
+  anchor_id: string;
+  golden_count: number;
+  unregistered: number;
+  score_median: number;
+  score_spread: number;
+  pixel_z: number;
+  /** Absolute floor on an anomalous image's score. */
+  min_score: number;
+  image_z: number;
+  threshold: number;
+  frame_w: number;
+  frame_h: number;
+}

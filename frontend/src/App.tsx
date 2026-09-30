@@ -23,6 +23,9 @@ import { ChangeDetectionTab } from './components/ChangeDetectionTab';
 import { AlternateAnalysisTab } from './components/AlternateAnalysisTab';
 import { AlignmentDialog } from './components/AlignmentDialog';
 import { useUpload } from './hooks/useUpload';
+import { BatchPage } from './components/BatchPage';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import { postForm } from './lib/api';
 import { DEFAULT_SETTINGS, type DetectionSettings } from './lib/settings';
 
@@ -46,6 +49,7 @@ export function App() {
   const [warpedUrl, setWarpedUrl] = useState<string | null>(null);
   const [alignDialogOpen, setAlignDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [mode, setMode] = useState<'pair' | 'batch'>('pair');
   const [settings, setSettings] = useState<DetectionSettings>(DEFAULT_SETTINGS);
   const patchSettings = useCallback((p: Partial<DetectionSettings>) => setSettings(s => ({ ...s, ...p })), []);
 
@@ -105,15 +109,30 @@ export function App() {
           <Typography variant="h6" component="h1" fontWeight={700}>
             TSCM Change Detection
           </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
-            Upload a Before and After image to identify changes between them.
+          <Typography variant="body2" color="text.secondary" sx={{ ml: 2, display: { xs: 'none', md: 'block' } }}>
+            {mode === 'pair'
+              ? 'Upload a Before and After image to identify changes between them.'
+              : 'Upload many photos of one scene to find the ones that differ.'}
           </Typography>
+          <ToggleButtonGroup
+            value={mode} exclusive size="small" aria-label="Mode" sx={{ ml: 'auto' }}
+            onChange={(_, v) => { if (v) setMode(v); }}
+          >
+            <ToggleButton value="pair">Compare two</ToggleButton>
+            <ToggleButton value="batch">Batch anomalies</ToggleButton>
+          </ToggleButtonGroup>
         </Toolbar>
       </AppBar>
 
       {(uploadingBefore || uploadingAfter || uploadingBaseline) && <LinearProgress aria-label="Uploading" />}
 
-      <Container maxWidth={false} sx={{ py: 3, maxWidth: '80%', mx: 'auto' }}>
+      {mode === 'batch' && (
+        <Container maxWidth={false} sx={{ py: 3, maxWidth: '80%', mx: 'auto' }}>
+          <BatchPage />
+        </Container>
+      )}
+
+      <Container maxWidth={false} sx={{ py: 3, maxWidth: '80%', mx: 'auto', display: mode === 'pair' ? undefined : 'none' }}>
         <UploadPanel
           before={before}
           after={after}
@@ -178,7 +197,7 @@ export function App() {
         )}
       </Container>
 
-      {ready && (
+      {ready && mode === 'pair' && (
         <Tooltip title={warpedUrl ? 'Edit manual alignment' : 'Align images manually'} placement="left">
           <Fab
             aria-label={warpedUrl ? 'Edit manual alignment' : 'Align images manually'}

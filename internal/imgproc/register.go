@@ -28,6 +28,11 @@ type Aligned struct {
 	Valid   *image.Gray // 255 where Before holds real data (nil = everywhere)
 	Resized bool
 	Reg     Registration
+	// Transform maps pixel coordinates of the original before image into the
+	// Before/After frame (resize, then homography, then residual shift).
+	// Not set (TransformOK=false) after non-rigid local refinement.
+	Transform   [9]float64
+	TransformOK bool
 }
 
 // RegisterPair brings before into after's frame at analysis resolution.
@@ -43,7 +48,9 @@ func RegisterPair(before, after *image.NRGBA, auto bool) Aligned {
 // RegisterPairOpts is RegisterPair with optional local (non-rigid) refinement.
 func RegisterPairOpts(before, after *image.NRGBA, auto, local bool) Aligned {
 	out := registerCore(before, after, auto)
+	out.TransformOK = true
 	if auto && local {
+		out.TransformOK = false
 		out.Before, out.Valid = RefineLocal(out.Before, out.After, out.Valid)
 		if out.Reg.Message != "" {
 			out.Reg.Message += "; local refinement applied"
@@ -55,7 +62,8 @@ func RegisterPairOpts(before, after *image.NRGBA, auto, local bool) Aligned {
 func registerCore(before, after *image.NRGBA, auto bool) Aligned {
 	a := DownsampleNRGBA(after, MaxAnalysisDim)
 	b, valid, resized := resizeToFrame(before, a.Bounds().Dx(), a.Bounds().Dy())
-	out := Aligned{Before: b, After: a, Valid: valid, Resized: resized, Reg: Registration{Mode: "none"}}
+	out := Aligned{Before: b, After: a, Valid: valid, Resized: resized, Reg: Registration{Mode: "none"},
+		Transform: [9]float64(frameTransform(before.Bounds().Dx(), before.Bounds().Dy(), a.Bounds().Dx(), a.Bounds().Dy()))}
 	if resized {
 		out.Reg.Mode = "resize"
 	}
@@ -81,6 +89,7 @@ func registerCore(before, after *image.NRGBA, auto bool) Aligned {
 	warped, wvalid := WarpHomography(b, est.h, a.Bounds().Dx(), a.Bounds().Dy())
 	out.Before = warped
 	out.Valid = andMask(out.Valid, wvalid)
+	out.Transform = [9]float64(mat3Mul(mat3(est.h), mat3(out.Transform)))
 	out.Reg.Mode, out.Reg.Applied = "auto", true
 	out.Reg.Message = fmt.Sprintf("aligned with %d feature matches", len(est.inliers))
 	return refineOnly(out)
@@ -143,6 +152,7 @@ func refineOnly(a Aligned) Aligned {
 	}
 	a.Before, a.Valid = shiftImage(a.Before, a.Valid, dx, dy)
 	a.Reg.ShiftX, a.Reg.ShiftY = dx, dy
+	a.Transform = [9]float64(mat3Mul(mat3{1, 0, float64(dx), 0, 1, float64(dy), 0, 0, 1}, mat3(a.Transform)))
 	if !a.Reg.Applied {
 		a.Reg.Mode, a.Reg.Applied = "auto", true
 		a.Reg.Message = fmt.Sprintf("corrected %d,%d px camera shift", dx, dy)
@@ -287,6 +297,20 @@ func andMask(a, b *image.Gray) *image.Gray {
 		}
 	}
 	return out
+}
+
+// frameTransform is the affine map resizeToFrame applies to an iw×ih image.
+func frameTransform(iw, ih, w, h int) mat3 {
+	if iw == w && ih == h {
+		return mat3{1, 0, 0, 0, 1, 0, 0, 0, 1}
+	}
+	ar := (float64(iw) / float64(ih)) / (float64(w) / float64(h))
+	if math.Abs(ar-1) < 0.02 {
+		return mat3{float64(w) / float64(iw), 0, 0, 0, float64(h) / float64(ih), 0, 0, 0, 1}
+	}
+	s := math.Min(float64(w)/float64(iw), float64(h)/float64(ih))
+	nw, nh := max(1, int(float64(iw)*s+0.5)), max(1, int(float64(ih)*s+0.5))
+	return mat3{s, 0, float64((w - nw) / 2), 0, s, float64((h - nh) / 2), 0, 0, 1}
 }
 
 // resizeToFrame scales img to w×h. When the aspect ratios agree within 2% it
