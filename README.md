@@ -1,10 +1,15 @@
 # TSCM Change Detection Analysis Tool
 
-A web application for Technical Surveillance Countermeasures (TSCM) professionals to detect and analyze changes between two images. Upload a Before and After photo to identify potential modifications or anomalies in a surveillance area.
+A web application for Technical Surveillance Countermeasures (TSCM) professionals to find what changed in a space. It works in two ways:
+
+- **Compare two** — upload a Before and an After photo of the same spot. The tool aligns them, highlights every change, and ranks the findings.
+- **Batch anomalies** — upload tens to hundreds of photos of the same scene. The tool learns what the scene normally looks like and flags the shots that differ, showing where.
+
+Everything runs locally in a single self-contained binary; no images leave your machine.
 
 **Stack:** Go (Gin) backend · React 19 + TypeScript frontend · MUI · Pure-Go image processing (no OpenCV)
 
-![Upload Screen](./img/upload.png)
+![Compare two: Before and After uploaded, Image Comparison tab with the slider](./img/upload.png)
 
 ## Installation
 
@@ -113,89 +118,129 @@ sudo mv tscm-change-detection /usr/local/bin/
 
 The app opens at `http://localhost:8080`.
 
-## Usage
+To run the tests: `go test ./...` and, in `frontend/`, `bun run typecheck && bun test`. See [AGENTS.md](AGENTS.md) for the architecture and the evaluation harnesses used to measure detection quality.
 
-Upload a **Before** and **After** image using the two panels at the top. Previews appear immediately. If the images differ in size, the Before image is automatically resized to match the After image for analysis.
+## Quick start
 
-Both photos are **automatically aligned** on upload: the tool matches features between them, rejects implausible fits, and corrects small camera shifts, so handheld photos compare cleanly. Turn this off with **Auto-align photos** on the Change Detection tab. EXIF rotation from phone photos is applied automatically.
+1. Run the binary and open `http://localhost:8080`.
+2. Pick a mode with the **Compare two / Batch anomalies** switch in the top-right corner.
+3. **Compare two:** drop a Before and an After photo into the two panels, then use the tabs below them.
+   **Batch anomalies:** drop in a folder of photos of one scene and click **Find anomalies**.
 
-For extra confidence, use **Add extra baseline photo** to upload more "Before" shots of the same spot. They are combined (per-pixel median) and the natural variation between them is subtracted, so normally-varying areas stop triggering detections.
+## Compare two
 
-Once both images are uploaded, a **Transform button** (⇄) appears in the bottom-right corner. **Auto Align** in that dialog proposes 8 tie points spread around the frame on stable structure (corners of walls, cabinets, door frames), positioned from the full automatic fit; adjust any of them before applying. Click it to open the alignment dialog, where you can place up to 8 matching point pairs to perspective-warp the Before image onto the After image. This corrects for camera angle differences and reduces false positives. The button turns solid blue when an alignment is active.
+### Uploading and alignment
 
-![Align](./img/align.png)
+Drop or click to upload a **Before** and an **After** image (JPG or PNG). Phone photos are rotated upright automatically from their EXIF data.
 
-## Analysis Tools
+The two photos are **aligned automatically** on upload: the tool matches hundreds of features between them, fits the camera movement, rejects fits that look implausible, and corrects any remaining small shift. Hand-held photos taken from roughly the same spot therefore compare cleanly without any manual work. The result is shown at the top of the Change Detection tab (for example *"aligned with 177 feature matches"*), and it can be switched off there with **Auto-align photos**.
+
+If the photos differ in size, Before is scaled to match After; if their shapes differ, it is scaled without stretching and the padding is ignored during analysis.
+
+**Extra baselines.** Use **Add extra baseline photo** to upload more "Before" shots of the same spot. They are combined into a per-pixel median, and the natural variation between them (a flickering screen, a curtain that moves) is subtracted, so normally-varying areas stop triggering detections.
+
+### Manual alignment and tie points
+
+If automatic alignment isn't enough — for example when the camera moved a lot — click the **Transform button** (⇄, bottom-right) to open the alignment dialog. Place up to 8 matching point pairs, alternating between the Before and After images, then **Apply Alignment** to warp Before onto After. The button turns solid blue while a manual alignment is active; **Reset manual alignment** under the upload panels goes back to automatic alignment.
+
+**Auto Align** fills in all 8 pairs for you. It picks points spread around the frame, one per region, favouring corners of stable structure — wall and ceiling junctions, cabinet and door frames — over furniture and clutter in the middle of the scene. Their After positions come from the full automatic fit, so they are accurate even where features are hard to click by hand. Review them, move any that landed on something that may have moved, and apply.
+
+![Alignment dialog with 8 auto-detected tie points spread around the frame](./img/align.png)
 
 ### Tab 1 — Image Comparison
 
-Visually compare the two images side by side. Switch between three modes:
+Visually compare the two images. Switch between three modes:
 
-- **Slider** — drag a divider left/right to reveal Before or After; the handle can also be dragged vertically to inspect any part of the image
-- **Toggle** — click `Before`, `After`, or `↔` to flip between full-resolution images instantly
-- **Auto** — automatically flickers between Before and After at a speed controlled by the Speed slider (100 ms – 2 s per frame)
+- **Slider** — drag the divider left/right to reveal Before or After; drag the round handle vertically to inspect any part of the image.
+- **Toggle** — click `Before`, `After`, or `↔` to flip between the full images instantly.
+- **Auto** — flickers between Before and After at the speed set by the Speed slider (100 ms – 2 s per frame). Flicker comparison makes small changes jump out.
 
-**Keyboard:** `←` shows Before and `→` shows After in every mode (flipping by hand stops Auto). Use the fullscreen button to flip full-screen (`Space` also flips, `Esc` exits). The slider's grip is focusable: arrow keys nudge it, `Shift` moves in bigger steps, `Home`/`End` jump to the ends. In fullscreen on any result image, `←`/`→` cycle through Before, After and the result.
+Press `←` to show Before and `→` to show After in any mode (flipping by hand stops Auto). The fullscreen button (top-right of the image) shows the comparison full-screen with Before/After labels; there, `Space` also flips and `Esc` exits.
 
-![Image Comparison](./img/compare.png)
+![Image Comparison tab in Slider mode](./img/compare.png)
 
 ### Tab 2 — Change Detection
 
-Displays a single result: the After image with detected changes highlighted in your chosen color. Results update automatically whenever any control is adjusted.
+Shows the After image with detected changes highlighted. Each change is drawn as a numbered box, ranked from strongest to weakest, and listed under the image as **Findings**. Click a finding (in the list or on the image) to see zoomed crops of that area. Results update automatically whenever a control changes.
 
-**Primary controls:**
+![Change Detection with ranked findings and a zoomed crop of finding #1](./img/detection.png)
 
-- **Detection Strength (5–100, default 75)** — threshold sensitivity. Lower values flag subtle changes; higher values reduce false positives.
-- **Noise Reduction (1–15, default 7×7)** — morphological opening kernel. Suppresses isolated noise pixels and compression artifacts before thresholding.
-- **Highlight Color** — five preset swatches: Red, Orange, Yellow, Cyan, Lime.
-- **Highlight Opacity (10–100%, default 55%)** — how strongly the highlight color overlays the After image.
-- **Auto-align photos** — feature-based registration before comparing (default on).
-- **Adaptive threshold** — derive the threshold from each pair's own noise level instead of a fixed number; Detection Strength then only tunes it.
-- **Mark ignore zones** — drag rectangles over areas that legitimately change (screens, windows). They are excluded from detection and from reports.
+**Controls:**
 
-Detected changes are drawn as numbered boxes, ranked by strength, and listed under the image. Select a finding to see a zoomed crop. **Export report** saves a self-contained HTML file (print it to PDF) with the images, ranked findings with crops, the settings used, and SHA-256 hashes of both source photos.
+- **Detection Strength (5–100, default 75)** — higher values flag subtler changes; lower values reduce false positives.
+- **Noise Reduction (1–15, default 7×7)** — removes specks smaller than this before counting changes.
+- **Highlight Color** and **Highlight Opacity** — how changes are drawn.
+- **Auto-align photos** — automatic alignment on/off (see above).
+- **Adaptive threshold** — sets the detection threshold from each pair's own noise level instead of a fixed number; Detection Strength then fine-tunes it. Useful when image quality varies.
+- **Mark ignore zones** — drag rectangles over areas that legitimately change (TV and computer screens, windows, clocks). They are excluded from detection and reports. Remove one with its ×, or all with the chip that appears.
+- **Export report** — saves a self-contained HTML file (open it in a browser and print to PDF) with both images, the highlighted result, every finding with a crop, the settings used, and SHA-256 hashes of both source files for chain-of-custody records.
 
 **Advanced Options & Stats** (collapsed by default):
 
-- **Min Region Size** — discard detected blobs smaller than this many pixels, eliminating tiny spurious detections.
-- **Pre-blur (σ 0–4, default 2.0)** — Gaussian blur applied to both images before differencing. Smooths JPEG block artifacts and sub-pixel camera jitter. Set to 0 to disable.
-- **Fill Gaps (1–15, default 5×5)** — morphological closing kernel applied after noise reduction. Fills interior holes in detected regions so real objects appear as solid blobs.
-- **Shift Tolerance (0–3 px)** — ignores differences explained by a few pixels of residual misalignment. Helps hand-held photos; very small real changes can be hidden at higher values.
-- **Match exposure** — fits a per-channel gain/offset of Before to After so brightness and white-balance drift between shots isn't flagged.
-- **Normalize Lighting** — simple mean-luminance shift, used when Match exposure is off.
-- **Colour-aware** — compares colour (CIELAB) as well as brightness, so colour-only changes are detected.
-- **Stats** — Changed Area %, Changed Pixels, and Distinct Regions for the current result.
-
-![Change Detection](./img/detection.png)
+- **Min Region Size** — discard detections smaller than this many pixels.
+- **Pre-blur (σ 0–4, default 2.0)** — smooths JPEG artifacts and slight camera shake before comparing. 0 disables it.
+- **Fill Gaps (1–15, default 5×5)** — fills holes inside detected regions so objects appear as solid shapes.
+- **Shift Tolerance (0–3 px)** — ignores differences explained by a pixel or two of leftover misalignment. Helps hand-held photos; at higher values very small real changes can be hidden.
+- **Match exposure** (on) — corrects brightness and white-balance differences between the shots so they aren't flagged as changes.
+- **Normalize lighting** — a simpler brightness correction, used when Match exposure is off.
+- **Colour-aware** (on) — compares colour as well as brightness, so an object that changed colour but not brightness is still caught.
+- **Stats** — changed area %, changed pixels, distinct regions, and the threshold actually used.
 
 ### Tab 3 — Alternate Analysis
 
-Runs four visualizations from a single pass of the same diff pipeline (and the same settings as Change Detection), useful for characterizing the nature and severity of detected changes. No configuration required — results appear automatically once both images are uploaded.
+Four views of the same comparison (using the same settings as Change Detection), useful for characterizing what kind of change was found:
 
-- **Image Difference** — raw grayscale difference map showing per-pixel change magnitude.
-- **Channel Subtraction** — per-channel float subtraction (After − Before), normalized to 0–255. Preserves gradient information and color-channel asymmetry; useful for detecting subtle or gradual modifications.
-- **Change Intensity Heatmap** — JET colormap overlay (blue = low change, red = high change). Useful for assessing the magnitude and spatial distribution of changes.
-- **Canny Edge Detection** — edge detection run on the difference map, highlighting structural boundaries of changed regions.
+- **Image Difference** — grayscale map of how much each pixel changed.
+- **Channel Subtraction** — After − Before per colour channel; reveals colour shifts and subtle, gradual modifications.
+- **Change Intensity Heatmap** — blue = little change, red = strong change; stretched so faint changes stay visible.
+- **Canny Edge Detection** — outlines of the changed structures.
 
-![Alternate Analysis](./img/alternate.png)
+Open any view fullscreen and use `←`/`→` to flip through all four.
 
-## Batch Anomalies (many photos of one scene)
+![Alternate Analysis: difference, subtraction, heatmap and edge views](./img/alternate.png)
 
-Switch to **Batch anomalies** in the top-right corner. Drop in tens to hundreds of photos of the **same scene** (or choose a folder), then click **Find anomalies**. The tool aligns every shot to a typical reference shot, learns what the scene normally looks like from the shots that agree with each other (the "golden set"), and flags the shots that differ, with a heat map and boxes showing where.
+## Batch anomalies
 
-- **Strictness** — lower flags more images; results re-classify instantly without re-running.
-- **Score strip** — every image as a dot, most unusual first; click one to inspect.
-- **Inspector** — the shot aligned to the scene, with heat overlay and numbered regions. `←`/`→` step between images; in fullscreen, `←`/`→` flip between the shot and the golden reference.
-- **Export report** — a self-contained HTML report with the golden reference and every anomalous shot annotated.
-- Shots that can't be aligned (a different position or a different scene) are marked **unaligned**; being unalignable is itself unusual.
+Use this mode when you have **many photos of the same scene** — repeated sweeps of a room, a series from a fixed camera, a set of scans — and want to find the ones that are different, without choosing a single "before".
 
-Detection covers both compact objects and thin structures such as cables or wires. Blown-out highlights (lamps, glare) are ignored. Up to 1000 images per batch.
+1. Switch to **Batch anomalies** (top-right).
+2. Drop in the photos, or use **Choose images** / **Choose folder**. Tens to hundreds work well (up to 1000); at least 10 is recommended.
+3. Click **Find anomalies**. A progress bar shows the images being aligned; 50–100 images take a few seconds.
+
+![Batch results: summary, strictness slider, score strip and ranked image cards](./img/batch.png)
+
+**Reading the results**
+
+- **Summary** — images analysed, how many are anomalous at the current strictness, how many formed the *golden set* (the shots that agree with each other and define "normal"), and how many could not be aligned.
+- **Strictness** — lower values flag more images. Moving the slider re-classifies instantly without re-running the analysis.
+- **Score strip** — every image as a dot, most unusual first. The dashed line is the threshold; red dots are above it. Click any dot to inspect that image.
+- **Image cards** — sorted by score. Anomalous images have a red border and a heat overlay. **unaligned** means the shot couldn't be matched to the scene (taken from somewhere else, or of a different scene), which is unusual in itself.
+- **Anomalies only** hides the normal shots.
+
+**Inspecting an image.** Click a card or dot to open the inspector: the shot aligned to the scene, with a heat overlay (toggle **Heat**) and numbered boxes around each anomalous area. Use `←`/`→` or the arrow buttons to step through images. Open it fullscreen to flip between the shot and the **golden reference** — the typical appearance of the scene, built from the golden set.
+
+![Inspector showing one anomaly boxed and heat-mapped on an aligned image](./img/batch-inspector.png)
+
+**Export report** saves a self-contained HTML report with the golden reference and each anomalous image annotated with its boxes and heat, plus the method and settings.
+
+**How it works, briefly.** Every photo is aligned to the most typical shot and exposure-matched. The tool then computes, for every pixel, the median and normal spread across the shots that agree with each other, repeatedly dropping shots that don't. Each image is scored by its strongest area of deviation. It looks for both compact objects and thin structures such as cables and wires, and ignores blown-out highlights (lamps, glare) that vary from shot to shot. An image is flagged only if it clearly stands out from the golden set *and* the tool can point to where.
+
+## Keyboard shortcuts
+
+| Where | Keys | Action |
+|---|---|---|
+| Image Comparison | `←` / `→` | Show Before / After |
+| Comparison slider (focused) | `←` `→` `↑` `↓`, `Shift`, `Home`/`End` | Move the divider and handle; bigger steps; jump to ends |
+| Any fullscreen view | `←` / `→`, `Space`, `Esc` | Flip between images, flip, exit |
+| Change Detection fullscreen | `←` / `→` | Cycle Before, After and the result |
+| Batch inspector | `←` / `→` | Previous / next image |
 
 ## Best Practices
 
-- Use consistent lighting, angle, and most importantly **lens position** between shots.
-- If photos were taken from slightly different positions or angles, use the **alignment tool** (⇄ FAB) to mark 4–8 matching landmarks before running analysis — this significantly reduces geometric false positives.
-- Enable **Normalize Lighting** when shots were taken under different ambient conditions.
-- Increase **Pre-blur** if JPEG compression artifacts or minor camera shake are producing false positives along high-contrast edges.
-- Use **Alternate Analysis** to cross-reference: the heatmap shows severity, the subtraction view reveals color-channel changes, and the edge map highlights structural boundaries.
-- If getting too many false positives, decrease Detection Strength and/or increase Noise Reduction.
+- Shoot from the **same position and height** each time; consistent lens position matters more than anything else. Automatic alignment corrects small differences, but it can't undo parallax (near objects shifting against far ones) from a large change in position.
+- Keep lighting consistent where you can. Exposure and white-balance differences are corrected automatically, but moving shadows and lamps turning on or off are real visual changes.
+- Take **several Before shots** of important areas and add them as extra baselines, or use Batch mode — the tool then learns what normally varies.
+- Mark **ignore zones** over screens, windows and anything else that is expected to change.
+- If there are too many false positives, lower Detection Strength, raise Noise Reduction or Pre-blur, or add 1 px of Shift Tolerance. If real changes are missed, raise Detection Strength or turn on Adaptive threshold.
+- When automatic alignment reports that it was rejected, use the alignment dialog: Auto Align, check the points, and apply.
+- Use **Alternate Analysis** to cross-check: the heatmap shows severity, channel subtraction reveals colour changes, and the edge map shows structural outlines.
