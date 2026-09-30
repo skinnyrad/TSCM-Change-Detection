@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      # The Go binary embeds frontend/dist, so the frontend must build first.
+      - name: Frontend install, typecheck, test, build
+        working-directory: frontend
+        run: |
+          bun install --frozen-lockfile
+          bun run typecheck
+          bun test
+          bun run build
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Go test (race)
+        run: go test -race ./...

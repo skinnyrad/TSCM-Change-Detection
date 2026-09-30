@@ -10,46 +10,15 @@ import (
 // and the number of regions found.
 // Matches cv2.findContours(RETR_EXTERNAL) + cv2.drawContours behavior.
 func DrawContours(img *image.NRGBA, mask *image.Gray, lineColor [3]uint8) (*image.NRGBA, int) {
+	if img.Bounds().Dx() != mask.Bounds().Dx() || img.Bounds().Dy() != mask.Bounds().Dy() {
+		return img, 0
+	}
 	b := mask.Bounds()
 	w, h := b.Dx(), b.Dy()
 
-	// Label each pixel with its connected component ID (0 = background)
-	labels := make([]int, w*h)
-	regionCount := 0
-	visited := make([]bool, w*h)
-
+	_, regions := components(mask)
+	regionCount := len(regions)
 	dirs := [4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
-
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			idx := y*w + x
-			if visited[idx] || mask.GrayAt(x, y).Y == 0 {
-				continue
-			}
-			regionCount++
-			label := regionCount
-			queue := [][2]int{{x, y}}
-			visited[idx] = true
-			labels[idx] = label
-			for len(queue) > 0 {
-				p := queue[0]
-				queue = queue[1:]
-				for _, d := range dirs {
-					nx, ny := p[0]+d[0], p[1]+d[1]
-					if nx < 0 || nx >= w || ny < 0 || ny >= h {
-						continue
-					}
-					nidx := ny*w + nx
-					if visited[nidx] || mask.GrayAt(nx, ny).Y == 0 {
-						continue
-					}
-					visited[nidx] = true
-					labels[nidx] = label
-					queue = append(queue, [2]int{nx, ny})
-				}
-			}
-		}
-	}
 
 	// Copy the input image
 	out := image.NewNRGBA(img.Bounds())
@@ -64,7 +33,7 @@ func DrawContours(img *image.NRGBA, mask *image.Gray, lineColor [3]uint8) (*imag
 	c := color.NRGBA{R: lineColor[0], G: lineColor[1], B: lineColor[2], A: 255}
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			if labels[y*w+x] == 0 {
+			if mask.GrayAt(x, y).Y == 0 {
 				continue
 			}
 			isBoundary := false

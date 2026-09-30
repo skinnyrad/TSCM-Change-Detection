@@ -53,3 +53,35 @@ func JETColormap(gray *image.Gray) *image.NRGBA {
 	}
 	return out
 }
+
+// NormalizeHeat stretches a diff map so its 99.5th percentile maps to 255,
+// making faint change visible instead of rendering uniformly blue. Returns
+// the input unchanged if it is essentially empty.
+func NormalizeHeat(gray *image.Gray) *image.Gray {
+	b := gray.Bounds()
+	w, h := b.Dx(), b.Dy()
+	var hist [256]int
+	for y := 0; y < h; y++ {
+		for _, v := range gray.Pix[y*gray.Stride : y*gray.Stride+w] {
+			hist[v]++
+		}
+	}
+	target, acc, p := int(0.995*float64(w*h)), 0, 255
+	for v, n := range hist {
+		acc += n
+		if acc > target {
+			p = v
+			break
+		}
+	}
+	if p < 8 {
+		return gray
+	}
+	out := image.NewGray(b)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			out.Pix[y*out.Stride+x] = uint8(min(255, int(gray.Pix[y*gray.Stride+x])*255/p))
+		}
+	}
+	return out
+}

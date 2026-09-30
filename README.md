@@ -117,6 +117,10 @@ The app opens at `http://localhost:8080`.
 
 Upload a **Before** and **After** image using the two panels at the top. Previews appear immediately. If the images differ in size, the Before image is automatically resized to match the After image for analysis.
 
+Both photos are **automatically aligned** on upload: the tool matches features between them, rejects implausible fits, and corrects small camera shifts, so handheld photos compare cleanly. Turn this off with **Auto-align photos** on the Change Detection tab. EXIF rotation from phone photos is applied automatically.
+
+For extra confidence, use **Add extra baseline photo** to upload more "Before" shots of the same spot. They are combined (per-pixel median) and the natural variation between them is subtracted, so normally-varying areas stop triggering detections.
+
 Once both images are uploaded, a **Transform button** (⇄) appears in the bottom-right corner. Click it to open the alignment dialog, where you can place up to 8 matching point pairs to perspective-warp the Before image onto the After image. This corrects for camera angle differences and reduces false positives. The button turns solid blue when an alignment is active.
 
 ![Align](./img/align.png)
@@ -131,6 +135,8 @@ Visually compare the two images side by side. Switch between three modes:
 - **Toggle** — click `Before`, `After`, or `↔` to flip between full-resolution images instantly
 - **Auto** — automatically flickers between Before and After at a speed controlled by the Speed slider (100 ms – 2 s per frame)
 
+**Keyboard:** `←` shows Before and `→` shows After in every mode (flipping by hand stops Auto). Use the fullscreen button to flip full-screen (`Space` also flips, `Esc` exits). The slider's grip is focusable: arrow keys nudge it, `Shift` moves in bigger steps, `Home`/`End` jump to the ends. In fullscreen on any result image, `←`/`→` cycle through Before, After and the result.
+
 ![Image Comparison](./img/compare.png)
 
 ### Tab 2 — Change Detection
@@ -143,20 +149,28 @@ Displays a single result: the After image with detected changes highlighted in y
 - **Noise Reduction (1–15, default 7×7)** — morphological opening kernel. Suppresses isolated noise pixels and compression artifacts before thresholding.
 - **Highlight Color** — five preset swatches: Red, Orange, Yellow, Cyan, Lime.
 - **Highlight Opacity (10–100%, default 55%)** — how strongly the highlight color overlays the After image.
+- **Auto-align photos** — feature-based registration before comparing (default on).
+- **Adaptive threshold** — derive the threshold from each pair's own noise level instead of a fixed number; Detection Strength then only tunes it.
+- **Mark ignore zones** — drag rectangles over areas that legitimately change (screens, windows). They are excluded from detection and from reports.
+
+Detected changes are drawn as numbered boxes, ranked by strength, and listed under the image. Select a finding to see a zoomed crop. **Export report** saves a self-contained HTML file (print it to PDF) with the images, ranked findings with crops, the settings used, and SHA-256 hashes of both source photos.
 
 **Advanced Options & Stats** (collapsed by default):
 
 - **Min Region Size** — discard detected blobs smaller than this many pixels, eliminating tiny spurious detections.
 - **Pre-blur (σ 0–4, default 2.0)** — Gaussian blur applied to both images before differencing. Smooths JPEG block artifacts and sub-pixel camera jitter. Set to 0 to disable.
 - **Fill Gaps (1–15, default 5×5)** — morphological closing kernel applied after noise reduction. Fills interior holes in detected regions so real objects appear as solid blobs.
-- **Normalize Lighting** — shifts each image's mean luminance to a common baseline before differencing, reducing false positives caused by global brightness changes between shots.
+- **Shift Tolerance (0–3 px)** — ignores differences explained by a few pixels of residual misalignment. Helps hand-held photos; very small real changes can be hidden at higher values.
+- **Match exposure** — fits a per-channel gain/offset of Before to After so brightness and white-balance drift between shots isn't flagged.
+- **Normalize Lighting** — simple mean-luminance shift, used when Match exposure is off.
+- **Colour-aware** — compares colour (CIELAB) as well as brightness, so colour-only changes are detected.
 - **Stats** — Changed Area %, Changed Pixels, and Distinct Regions for the current result.
 
 ![Change Detection](./img/detection.png)
 
 ### Tab 3 — Alternate Analysis
 
-Runs four simultaneous visualizations using the same underlying diff pipeline, useful for characterizing the nature and severity of detected changes. No configuration required — results appear automatically once both images are uploaded.
+Runs four visualizations from a single pass of the same diff pipeline (and the same settings as Change Detection), useful for characterizing the nature and severity of detected changes. No configuration required — results appear automatically once both images are uploaded.
 
 - **Image Difference** — raw grayscale difference map showing per-pixel change magnitude.
 - **Channel Subtraction** — per-channel float subtraction (After − Before), normalized to 0–255. Preserves gradient information and color-channel asymmetry; useful for detecting subtle or gradual modifications.

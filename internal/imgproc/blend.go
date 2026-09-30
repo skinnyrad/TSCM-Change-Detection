@@ -3,6 +3,7 @@ package imgproc
 import (
 	"image"
 	"image/color"
+	"math"
 )
 
 // HighlightChanges blends a color overlay onto after wherever mask > 0.
@@ -10,6 +11,10 @@ import (
 // Matches Python's highlight_changes(img2, thresh, color=(255,60,60), alpha=0.55).
 func HighlightChanges(after *image.NRGBA, mask *image.Gray, overlayColor [3]uint8, alpha float64) *image.NRGBA {
 	b := after.Bounds()
+	if mask.Bounds().Dx() != b.Dx() || mask.Bounds().Dy() != b.Dy() {
+		return after
+	}
+	alpha = math.Max(0, math.Min(1, alpha))
 	out := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 	inv := 1.0 - alpha
 

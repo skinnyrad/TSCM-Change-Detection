@@ -29,7 +29,7 @@ Build, test, and lint commands
 
 - Notes about embedding: the Go binary uses `//go:embed all:frontend/dist`. Always run the frontend build before `go build` if making UI changes.
 
-- Python (optional): requirements.txt exists (Pillow, streamlit, OpenCV, numpy). These appear to be for auxiliary scripts/notebooks — not required for the Go+React app.
+- Python (optional): scripts/prototyping/requirements.txt exists (Pillow, streamlit, OpenCV, numpy). These appear to be for auxiliary scripts/notebooks — not required for the Go+React app.
 
 ---
 
@@ -42,8 +42,9 @@ High-level architecture (big picture)
 
 - internal/
   - api: HTTP handler layer (endpoints wired in main.go). Key handlers (as named in main.go):
-    - HandleUploadBefore, HandleUploadAfter — receive uploaded images
-    - HandleAnalyze — perform analysis operations
+    - HandleUploadBefore, HandleUploadAfter, HandleUploadBaseline — receive uploaded images
+    - HandleRegistration — auto-alignment settings
+    - HandleAnalyze, HandleAnalyzeAlternate — perform analysis operations
     - HandleWarp, HandleClearWarp — alignment/warp control
     - HandleImageBefore, HandleImageAfter — serve the stored images
   - imgproc: image processing algorithms (pure-Go; no OpenCV runtime dependency for the Go server)

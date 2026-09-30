@@ -17,27 +17,47 @@ type mat3 [9]float64
 // transform. The output image is outW×outH (the dimensions of the "after" image).
 // Uses inverse mapping with bilinear interpolation. Accepts 4–8 point pairs.
 func WarpPerspective(src *image.NRGBA, srcPts, dstPts []Point, outW, outH int) (*image.NRGBA, error) {
-	// Inverse map: H that takes output (dst) coords back to source coords.
-	hinv, err := computeHomography(dstPts, srcPts)
+	out, _, err := WarpPerspectiveMasked(src, srcPts, dstPts, outW, outH)
+	return out, err
+}
+
+// WarpPerspectiveMasked is WarpPerspective that also returns a validity mask
+// (255 where the output pixel was sampled from inside src, 0 elsewhere).
+func WarpPerspectiveMasked(src *image.NRGBA, srcPts, dstPts []Point, outW, outH int) (*image.NRGBA, *image.Gray, error) {
+	h, err := computeHomography(srcPts, dstPts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
+	out, valid := WarpHomography(src, h, outW, outH)
+	return out, valid, nil
+}
+
+// WarpHomography warps src with the forward homography h (src→dst coordinates)
+// into an outW×outH image using inverse mapping and bilinear interpolation.
+// The returned mask is 255 where the output sampled from inside src.
+func WarpHomography(src *image.NRGBA, h [9]float64, outW, outH int) (*image.NRGBA, *image.Gray) {
+	out := image.NewNRGBA(image.Rect(0, 0, outW, outH))
+	valid := image.NewGray(image.Rect(0, 0, outW, outH))
+	hm := mat3(h)
+	if !mat3Invertible(hm) {
+		return out, valid
+	}
+	hinv := [9]float64(mat3Inv(hm))
 
 	sb := src.Bounds()
 	sw, sh := float64(sb.Dx()), float64(sb.Dy())
-	out := image.NewNRGBA(image.Rect(0, 0, outW, outH))
-
 	for py := 0; py < outH; py++ {
 		for px := 0; px < outW; px++ {
 			sx, sy := applyHomography(hinv, float64(px), float64(py))
 			if sx >= 0 && sx < sw && sy >= 0 && sy < sh {
 				out.SetNRGBA(px, py, bilinearSample(src, sx, sy))
+				valid.Pix[py*valid.Stride+px] = 255
 			} else {
 				out.SetNRGBA(px, py, color.NRGBA{A: 255})
 			}
 		}
 	}
-	return out, nil
+	return out, valid
 }
 
 // computeHomography solves for the 3×3 homography H that maps src[i]→dst[i].
@@ -92,7 +112,13 @@ func computeHomography(src, dst []Point) ([9]float64, error) {
 	Hn := mat3{h[0], h[1], h[2], h[3], h[4], h[5], h[6], h[7], 1}
 
 	// Denormalize: H = Td⁻¹ · Hn · Ts
+	if !mat3Invertible(Td) {
+		return [9]float64{}, fmt.Errorf("degenerate point configuration: destination points are coincident")
+	}
 	H := mat3Mul(mat3Mul(mat3Inv(Td), Hn), Ts)
+	if math.Abs(H[8]) < 1e-15 {
+		return [9]float64{}, fmt.Errorf("degenerate point configuration: homography is singular")
+	}
 
 	// Scale so H[8] = 1 (homogeneous normalization).
 	if math.Abs(H[8]) > 1e-15 {
@@ -152,6 +178,12 @@ func mat3Mul(a, b mat3) mat3 {
 	}
 	return c
 }
+
+func mat3Det(m mat3) float64 {
+	return m[0]*(m[4]*m[8]-m[5]*m[7]) - m[1]*(m[3]*m[8]-m[5]*m[6]) + m[2]*(m[3]*m[7]-m[4]*m[6])
+}
+
+func mat3Invertible(m mat3) bool { return math.Abs(mat3Det(m)) >= 1e-15 }
 
 func mat3Inv(m mat3) mat3 {
 	a, b, c := m[0], m[1], m[2]
@@ -251,7 +283,7 @@ func bilinearSample(img *image.NRGBA, x, y float64) color.NRGBA {
 	c11 := img.NRGBAAt(clampX(x1), clampY(y1))
 
 	lerp := func(a, b uint8, t float64) uint8 {
-		return uint8(float64(a)*(1-t)+float64(b)*t + 0.5)
+		return uint8(float64(a)*(1-t) + float64(b)*t + 0.5)
 	}
 
 	return color.NRGBA{

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
@@ -23,6 +23,8 @@ import { ChangeDetectionTab } from './components/ChangeDetectionTab';
 import { AlternateAnalysisTab } from './components/AlternateAnalysisTab';
 import { AlignmentDialog } from './components/AlignmentDialog';
 import { useUpload } from './hooks/useUpload';
+import { postForm } from './lib/api';
+import { DEFAULT_SETTINGS, type DetectionSettings } from './lib/settings';
 
 const darkTheme = createTheme({
   palette: {
@@ -36,48 +38,59 @@ const darkTheme = createTheme({
   shape: { borderRadius: 8 },
 });
 
+const tabProps = (i: number) => ({ id: `tab-${i}`, 'aria-controls': `tabpanel-${i}` });
+
 export function App() {
   const [before, setBefore] = useState<File | null>(null);
   const [after, setAfter] = useState<File | null>(null);
   const [warpedUrl, setWarpedUrl] = useState<string | null>(null);
   const [alignDialogOpen, setAlignDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
+  const [settings, setSettings] = useState<DetectionSettings>(DEFAULT_SETTINGS);
+  const patchSettings = useCallback((p: Partial<DetectionSettings>) => setSettings(s => ({ ...s, ...p })), []);
 
   const {
-    uploadBefore,
-    uploadAfter,
-    uploadingBefore,
-    uploadingAfter,
-    beforeDims,
-    afterDims,
-    beforeDisplayUrl,
-    afterDisplayUrl,
-    ready,
-    imageKey,
+    uploadBefore, uploadAfter, uploadBaseline, clearBaselines, refresh,
+    uploadingBefore, uploadingAfter, uploadingBaseline, error: uploadError,
+    beforeDims, afterDims, beforeDisplayUrl, afterDisplayUrl, baselines, ready, imageKey,
   } = useUpload();
 
+  // Uploading a new image invalidates any manual warp on the server as well,
+  // so only the client-side preview URL needs dropping here.
+  const dropWarpPreview = () => {
+    if (warpedUrl) URL.revokeObjectURL(warpedUrl);
+    setWarpedUrl(null);
+  };
+
   const handleBefore = (f: File) => {
+    dropWarpPreview();
     setBefore(f);
-    clearWarp();
     uploadBefore(f);
   };
 
   const handleAfter = (f: File) => {
+    dropWarpPreview();
     setAfter(f);
-    clearWarp();
     uploadAfter(f);
-  };
-
-  const clearWarp = () => {
-    if (warpedUrl) URL.revokeObjectURL(warpedUrl);
-    setWarpedUrl(null);
-    fetch('/api/clear-warp', { method: 'POST' }).catch(() => {});
   };
 
   const handleAligned = (url: string) => {
     if (warpedUrl) URL.revokeObjectURL(warpedUrl);
+    const img = new Image();
+    img.src = url;
+    img.decode().catch(() => {});
     setWarpedUrl(url);
     setActiveTab(0);
+    refresh();
+  };
+
+  const resetAlignment = async () => {
+    try {
+      await postForm('/api/clear-warp');
+    } finally {
+      dropWarpPreview();
+      refresh();
+    }
   };
 
   const bothSelected = before !== null && after !== null;
@@ -89,7 +102,7 @@ export function App() {
       <AppBar position="static" elevation={0} sx={{ borderBottom: '1px solid', borderColor: 'divider' }}>
         <Toolbar>
           <FlipRoundedIcon sx={{ mr: 1.5 }} />
-          <Typography variant="h6" fontWeight={700}>
+          <Typography variant="h6" component="h1" fontWeight={700}>
             TSCM Change Detection
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>
@@ -98,7 +111,7 @@ export function App() {
         </Toolbar>
       </AppBar>
 
-      {(uploadingBefore || uploadingAfter) && <LinearProgress />}
+      {(uploadingBefore || uploadingAfter || uploadingBaseline) && <LinearProgress aria-label="Uploading" />}
 
       <Container maxWidth={false} sx={{ py: 3, maxWidth: '80%', mx: 'auto' }}>
         <UploadPanel
@@ -106,9 +119,15 @@ export function App() {
           after={after}
           onBefore={handleBefore}
           onAfter={handleAfter}
+          onBaseline={uploadBaseline}
+          onClearBaselines={clearBaselines}
+          onResetAlignment={resetAlignment}
           beforeDisplayUrl={warpedUrl ?? beforeDisplayUrl}
           afterDisplayUrl={afterDisplayUrl}
+          baselines={baselines}
+          uploadingBaseline={uploadingBaseline}
           alignmentActive={warpedUrl !== null}
+          error={uploadError}
         />
 
         {bothSelected && (
@@ -116,22 +135,32 @@ export function App() {
             <Tabs
               value={activeTab}
               onChange={(_, v) => setActiveTab(v)}
+              aria-label="Analysis views"
               sx={{ borderBottom: '1px solid', borderColor: 'divider', px: 2 }}
             >
-              <Tab icon={<CompareRoundedIcon />} iconPosition="start" label="Image Comparison" />
-              <Tab icon={<SearchRoundedIcon />} iconPosition="start" label="Change Detection" />
-              <Tab icon={<BiotechRoundedIcon />} iconPosition="start" label="Alternate Analysis" />
+              <Tab icon={<CompareRoundedIcon />} iconPosition="start" label="Image Comparison" {...tabProps(0)} />
+              <Tab icon={<SearchRoundedIcon />} iconPosition="start" label="Change Detection" {...tabProps(1)} />
+              <Tab icon={<BiotechRoundedIcon />} iconPosition="start" label="Alternate Analysis" {...tabProps(2)} />
             </Tabs>
 
-            <Box sx={{ p: 3 }}>
+            <Box sx={{ p: 3 }} role="tabpanel" id={`tabpanel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
               {activeTab === 0 && beforeDisplayUrl && afterDisplayUrl && (
-                <ImageComparisonTab
+                <ImageComparisonTab beforeUrl={comparisonBeforeUrl} afterUrl={afterDisplayUrl} />
+              )}
+              {activeTab === 1 && (
+                <ChangeDetectionTab
+                  ready={ready}
+                  imageKey={imageKey}
+                  settings={settings}
+                  onSettings={patchSettings}
                   beforeUrl={comparisonBeforeUrl}
-                  afterUrl={afterDisplayUrl}
+                  afterUrl={afterDisplayUrl ?? ''}
+                  beforeFile={before}
+                  afterFile={after}
+                  onRefresh={refresh}
                 />
               )}
-              {activeTab === 1 && <ChangeDetectionTab ready={ready} imageKey={imageKey} />}
-              {activeTab === 2 && <AlternateAnalysisTab ready={ready} imageKey={imageKey} />}
+              {activeTab === 2 && <AlternateAnalysisTab ready={ready} imageKey={imageKey} settings={settings} />}
             </Box>
           </Paper>
         )}
@@ -150,8 +179,9 @@ export function App() {
       </Container>
 
       {ready && (
-        <Tooltip title={warpedUrl ? 'Edit alignment' : 'Align images'} placement="left">
+        <Tooltip title={warpedUrl ? 'Edit manual alignment' : 'Align images manually'} placement="left">
           <Fab
+            aria-label={warpedUrl ? 'Edit manual alignment' : 'Align images manually'}
             onClick={() => setAlignDialogOpen(true)}
             sx={{
               position: 'fixed',
@@ -169,17 +199,6 @@ export function App() {
             <TransformRoundedIcon />
           </Fab>
         </Tooltip>
-      )}
-      {/* Offscreen keeper images — keep decoded bitmaps alive in the browser's
-          paint cache so toggle, alignment dialog, and comparison slider are instant. */}
-      {beforeDisplayUrl && (
-        <img src={beforeDisplayUrl} alt="" aria-hidden style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: 1, height: 1 }} />
-      )}
-      {afterDisplayUrl && (
-        <img src={afterDisplayUrl} alt="" aria-hidden style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: 1, height: 1 }} />
-      )}
-      {warpedUrl && (
-        <img src={warpedUrl} alt="" aria-hidden style={{ position: 'fixed', top: '-9999px', left: '-9999px', width: 1, height: 1 }} />
       )}
     </ThemeProvider>
   );
