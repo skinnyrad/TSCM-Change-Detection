@@ -61,4 +61,6 @@ Other env-gated harnesses in `internal/imgproc` (all skipped by default; keep da
 
 ## Conventions
 
+`.gitignore` is written for this repo: every rule is anchored with a leading `/` to the folder it applies to. Don't paste in generic templates. The old Python template's unanchored `lib/` silently excluded `frontend/src/lib/` from a commit. Run `scripts/check-ignored.sh` after adding folders; it fails if any source file is being ignored.
+
 Agent guidance files here are named `AGENTS.md` (root and `frontend/`), not `CLAUDE.md`. The frontend uses Bun (see `frontend/AGENTS.md`); don't add Vite or Express.
