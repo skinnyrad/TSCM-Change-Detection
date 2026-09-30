@@ -197,7 +197,9 @@ Four views of the same comparison (using the same settings as Change Detection),
 
 Open any view fullscreen and use `←`/`→` to flip through all four.
 
-![Alternate Analysis: difference, subtraction, heatmap and edge views](./img/alternate.png)
+*Example: a pair of glasses was moved between the two shots (`test-images/glasses1.jpg` and `glasses2.jpg`). Each view shows both the old and the new position.*
+
+![Alternate Analysis of the glasses pair: difference, subtraction, heatmap and edge views](./img/alternate.png)
 
 ## Batch anomalies
 
