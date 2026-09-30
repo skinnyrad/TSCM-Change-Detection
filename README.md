@@ -155,13 +155,17 @@ Visually compare the two images. Switch between three modes:
 - **Toggle** — click `Before`, `After`, or `↔` to flip between the full images instantly.
 - **Auto** — flickers between Before and After at the speed set by the Speed slider (100 ms – 2 s per frame). Flicker comparison makes small changes jump out.
 
-Press `←` to show Before and `→` to show After in any mode (flipping by hand stops Auto). The fullscreen button (top-right of the image) shows the comparison full-screen with Before/After labels; there, `Space` also flips and `Esc` exits.
+Press `←` to show Before and `→` to show After in any mode (flipping by hand stops Auto).
+
+**Zoom in to inspect.** Pinch on a trackpad or touchscreen, hold `⌘`/`Ctrl` and scroll, double-click, or use the − / + buttons that appear in the bottom-right corner of the image. Drag (or scroll) to move around while zoomed; a small locator in the bottom-left shows which part of the image you're looking at. The zoomed view **stays put when you flip between Before and After or switch modes**, so you can compare the same small area in detail. In Slider mode, move the divider with its round handle while zoomed. Double-click again or press `0` to return to the whole image. The fullscreen button (top-right of the image) shows the comparison full-screen with Before/After labels; there, `Space` also flips and `Esc` exits.
 
 ![Image Comparison tab in Slider mode](./img/compare.png)
 
 ### Tab 2 — Change Detection
 
 Shows the After image with detected changes highlighted. Each change is drawn as a numbered box, ranked from strongest to weakest, and listed under the image as **Findings**. Click a finding (in the list or on the image) to see zoomed crops of that area. Results update automatically whenever a control changes.
+
+The result zooms the same way as the comparison view (pinch, `⌘`/`Ctrl`+scroll, double-click or the − / + buttons). The zoom is kept while you adjust the controls, so you can tune the settings while watching one area. Boxes stay clickable and ignore zones can be drawn at any zoom level.
 
 ![Change Detection with ranked findings and a zoomed crop of finding #1](./img/detection.png)
 
@@ -219,7 +223,7 @@ Use this mode when you have **many photos of the same scene** — repeated sweep
 - **Image cards** — sorted by score. Anomalous images have a red border and a heat overlay. **unaligned** means the shot couldn't be matched to the scene (taken from somewhere else, or of a different scene), which is unusual in itself.
 - **Anomalies only** hides the normal shots.
 
-**Inspecting an image.** Click a card or dot to open the inspector: the shot aligned to the scene, with a heat overlay (toggle **Heat**) and numbered boxes around each anomalous area. Use `←`/`→` or the arrow buttons to step through images. Open it fullscreen to flip between the shot and the **golden reference** — the typical appearance of the scene, built from the golden set.
+**Inspecting an image.** Click a card or dot to open the inspector: the shot aligned to the scene, with a heat overlay (toggle **Heat**) and numbered boxes around each anomalous area. Zoom in with pinch, `⌘`/`Ctrl`+scroll or double-click. Use `←`/`→` or the arrow buttons to step through images. Open it fullscreen to flip between the shot and the **golden reference** — the typical appearance of the scene, built from the golden set.
 
 ![Inspector showing one anomaly boxed and heat-mapped on an aligned image](./img/batch-inspector.png)
 
@@ -236,6 +240,9 @@ Use this mode when you have **many photos of the same scene** — repeated sweep
 | Any fullscreen view | `←` / `→`, `Space`, `Esc` | Flip between images, flip, exit |
 | Change Detection fullscreen | `←` / `→` | Cycle Before, After and the result |
 | Batch inspector | `←` / `→` | Previous / next image |
+| Any image (pointer over it) | `+` / `−` / `0` | Zoom in / out / reset |
+| Any image | Pinch, `⌘`/`Ctrl` + scroll, double-click | Zoom (double-click again to reset) |
+| Any zoomed image | Drag, or scroll | Pan |
 
 ## Best Practices
 

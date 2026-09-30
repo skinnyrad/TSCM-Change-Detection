@@ -12,6 +12,7 @@ import KeyboardArrowRightRoundedIcon from '@mui/icons-material/KeyboardArrowRigh
 import { useAspectRatio, fitWidth } from '../hooks/useAspectRatio';
 import { useFlipKeys } from '../hooks/useFlipKeys';
 import { useFullscreen } from '../hooks/useFullscreen';
+import { ZoomPan } from './ZoomPan';
 
 export interface Frame {
   label: string;
@@ -25,11 +26,15 @@ interface ResultImageProps {
   compare?: Frame[];
   /** Overlay (region boxes, ignore zones) drawn over this image, positioned in image fractions. */
   overlay?: ReactNode;
+  /** Changing this resets the zoom (e.g. new uploads). The zoom otherwise survives re-analysis and flipping. */
+  zoomKey?: unknown;
+  /** The overlay handles drags itself (drawing ignore zones), so dragging must not pan. */
+  panDisabled?: boolean;
 }
 
 const MAX_HEIGHT = '90vh';
 
-export function ResultImage({ src, caption, compare = [], overlay }: ResultImageProps) {
+export function ResultImage({ src, caption, compare = [], overlay, zoomKey, panDisabled }: ResultImageProps) {
   const { ref, active, toggle } = useFullscreen();
   const { aspectRatio, onLoad } = useAspectRatio();
 
@@ -71,21 +76,24 @@ export function ResultImage({ src, caption, compare = [], overlay }: ResultImage
           }),
         }}
       >
-        <Box sx={{ position: 'relative', width: 'fit-content', maxWidth: '100%' }}>
-          <Box
-            component="img"
-            src={current.src}
-            alt={current.label}
-            onLoad={onLoad}
-            sx={{
-              display: 'block', height: 'auto',
-              width: active ? 'auto' : fitWidth(aspectRatio, MAX_HEIGHT),
-              maxWidth: active ? '100vw' : '100%',
-              maxHeight: active ? '100vh' : MAX_HEIGHT,
-            }}
-          />
-          {showingResult && overlay}
-        </Box>
+        <ZoomPan resetKey={zoomKey} panDisabled={panDisabled} sx={{ width: 'fit-content', maxWidth: '100%' }}>
+          <Box sx={{ position: 'relative', width: 'fit-content', maxWidth: '100%' }}>
+            <Box
+              component="img"
+              src={current.src}
+              alt={current.label}
+              onLoad={onLoad}
+              draggable={false}
+              sx={{
+                display: 'block', height: 'auto',
+                width: active ? 'auto' : fitWidth(aspectRatio, MAX_HEIGHT),
+                maxWidth: active ? '100vw' : '100%',
+                maxHeight: active ? '100vh' : MAX_HEIGHT,
+              }}
+            />
+            {showingResult && overlay}
+          </Box>
+        </ZoomPan>
 
         {active && (
           <>

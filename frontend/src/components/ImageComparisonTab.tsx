@@ -15,6 +15,7 @@ import KeyboardArrowRightRoundedIcon from '@mui/icons-material/KeyboardArrowRigh
 import { fitWidth, useAspectRatio } from '../hooks/useAspectRatio';
 import { useFlipKeys } from '../hooks/useFlipKeys';
 import { useFullscreen } from '../hooks/useFullscreen';
+import { ZoomPan } from './ZoomPan';
 
 type Mode = 'slider' | 'toggle' | 'auto';
 
@@ -43,9 +44,12 @@ function ComparisonSlider({ beforeUrl, afterUrl, sliderX, onSliderX, maxHeight, 
 
   // Dragging anywhere on the container (except the grip) moves the divider.
   const startHorizontalDrag = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
     const container = containerRef.current;
     if (!container) return;
+    // While zoomed, dragging the image pans (handled by ZoomPan); the divider
+    // is then moved with its grip only.
+    if (parseFloat(getComputedStyle(container).getPropertyValue('--zoom') || '1') > 1.001) return;
+    e.preventDefault();
     const updateX = (clientX: number) => {
       const r = container.getBoundingClientRect();
       onSliderX(clamp(((clientX - r.left) / r.width) * 100));
@@ -96,27 +100,28 @@ function ComparisonSlider({ beforeUrl, afterUrl, sliderX, onSliderX, maxHeight, 
       ref={containerRef}
       onPointerDown={startHorizontalDrag}
       sx={{
-        position: 'relative', overflow: 'hidden', borderRadius: fullscreen ? 0 : 1, width: 'fit-content',
-        maxWidth: fullscreen ? '100vw' : 'calc(100% - 24px)', marginInline: 'auto',
-        userSelect: 'none', touchAction: 'none', cursor: 'col-resize',
+        position: 'relative', overflow: 'hidden', width: 'fit-content', maxWidth: '100%',
+        userSelect: 'none', cursor: 'col-resize',
       }}
     >
       <img
         src={beforeUrl}
         alt="Before"
+        draggable={false}
         onLoad={onLoad}
         style={{ width: fitWidth(aspectRatio, maxHeight), maxWidth: '100%', height: 'auto', maxHeight, display: 'block' }}
       />
       <img
         src={afterUrl}
         alt="After"
+        draggable={false}
         style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'fill',
           clipPath: `inset(0 0 0 ${sliderX}%)`, pointerEvents: 'none',
         }}
       />
       <Box sx={{
-        position: 'absolute', top: 0, bottom: 0, left: `${sliderX}%`, width: 2, transform: 'translateX(-50%)',
+        position: 'absolute', top: 0, bottom: 0, left: `${sliderX}%`, width: 'calc(2px / var(--zoom, 1))', transform: 'translateX(-50%)',
         bgcolor: 'rgba(255,255,255,0.6)', boxShadow: '0 0 8px rgba(0,0,0,0.5)', pointerEvents: 'none',
       }} />
       <Box
@@ -131,7 +136,8 @@ function ComparisonSlider({ beforeUrl, afterUrl, sliderX, onSliderX, maxHeight, 
         onKeyDown={onGripKey}
         onPointerDown={startGripDrag}
         sx={{
-          position: 'absolute', left: `${sliderX}%`, top: `${gripY}%`, transform: 'translate(-50%, -50%)',
+          // Counter-scale so the grip stays the same size on screen at any zoom.
+          position: 'absolute', left: `${sliderX}%`, top: `${gripY}%`, transform: 'translate(-50%, -50%) scale(calc(1 / var(--zoom, 1)))',
           width: 46, height: 46, borderRadius: '50%', bgcolor: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(6px)',
           border: '2px solid rgba(255,255,255,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'move', boxShadow: '0 2px 12px rgba(0,0,0,0.45)', touchAction: 'none', zIndex: 10,
@@ -160,11 +166,12 @@ interface StackedImagesProps {
 function StackedImages({ beforeUrl, afterUrl, showAfter, maxHeight, fullscreen }: StackedImagesProps) {
   const { aspectRatio, onLoad } = useAspectRatio();
   return (
-    <Box sx={{ position: 'relative', width: 'fit-content', maxWidth: fullscreen ? '100vw' : 'calc(100% - 24px)', marginInline: 'auto' }}>
+    <Box sx={{ position: 'relative', width: 'fit-content', maxWidth: '100%' }}>
       <Box
         component="img"
         src={beforeUrl}
         alt="Before"
+        draggable={false}
         onLoad={onLoad}
         sx={{
           width: fitWidth(aspectRatio, maxHeight), maxWidth: '100%', height: 'auto', maxHeight,
@@ -175,6 +182,7 @@ function StackedImages({ beforeUrl, afterUrl, showAfter, maxHeight, fullscreen }
         component="img"
         src={afterUrl}
         alt="After"
+        draggable={false}
         sx={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
           borderRadius: fullscreen ? 0 : 1, display: 'block', visibility: showAfter ? 'visible' : 'hidden',
@@ -267,7 +275,7 @@ export function ImageComparisonTab({ beforeUrl, afterUrl }: ImageComparisonTabPr
         )}
 
         <Typography variant="caption" color="text.disabled" sx={{ ml: 'auto' }}>
-          ← Before · After → &nbsp;(Space flips in fullscreen)
+          ← Before · After → · pinch or ⌘/Ctrl+scroll to zoom
         </Typography>
         <Tooltip title="Fullscreen" placement="left">
           <IconButton size="small" aria-label="View comparison fullscreen" onClick={toggle}>
@@ -286,14 +294,20 @@ export function ImageComparisonTab({ beforeUrl, afterUrl }: ImageComparisonTabPr
           }),
         }}
       >
-        {mode === 'slider' ? (
-          <ComparisonSlider
-            beforeUrl={beforeUrl} afterUrl={afterUrl} sliderX={sliderX} onSliderX={setSliderX}
-            maxHeight={maxHeight} fullscreen={active}
-          />
-        ) : (
-          <StackedImages beforeUrl={beforeUrl} afterUrl={afterUrl} showAfter={showAfter} maxHeight={maxHeight} fullscreen={active} />
-        )}
+        {/* One zoom for every mode: flipping Before/After or switching modes keeps the zoomed area. */}
+        <ZoomPan
+          resetKey={afterUrl}
+          sx={{ width: 'fit-content', maxWidth: active ? '100vw' : 'calc(100% - 24px)', marginInline: 'auto', borderRadius: active ? 0 : 1 }}
+        >
+          {mode === 'slider' ? (
+            <ComparisonSlider
+              beforeUrl={beforeUrl} afterUrl={afterUrl} sliderX={sliderX} onSliderX={setSliderX}
+              maxHeight={maxHeight} fullscreen={active}
+            />
+          ) : (
+            <StackedImages beforeUrl={beforeUrl} afterUrl={afterUrl} showAfter={showAfter} maxHeight={maxHeight} fullscreen={active} />
+          )}
+        </ZoomPan>
 
         {active && (
           <>

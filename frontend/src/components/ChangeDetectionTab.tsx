@@ -212,6 +212,8 @@ export function ChangeDetectionTab({
             src={highlightUrl}
             caption="Changes Highlighted on After"
             compare={compare}
+            zoomKey={imageKey}
+            panDisabled={drawing}
             overlay={
               <ImageOverlay
                 regions={data?.regions}

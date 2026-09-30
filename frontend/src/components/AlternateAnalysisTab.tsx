@@ -48,7 +48,7 @@ export function AlternateAnalysisTab({ ready, imageKey, settings }: AlternateAna
           {VIEWS.map(([k, caption]) => {
             const src = data[k];
             return src ? (
-              <ResultImage key={k} src={src} caption={caption} compare={frames.filter(f => f.src !== src)} />
+              <ResultImage key={k} src={src} caption={caption} compare={frames.filter(f => f.src !== src)} zoomKey={imageKey} />
             ) : null;
           })}
         </Box>
