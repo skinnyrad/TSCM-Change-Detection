@@ -22,6 +22,7 @@ type DiffOptions struct {
 	PreBlurSigma   float64 // Gaussian σ applied to colour images before differencing (0=off)
 	NormalizeLuma  bool    // shift per-image mean luma to 128 before diff
 	MatchIntensity bool    // per-channel gain/offset fit of before onto after (supersedes NormalizeLuma)
+	LocalLight     float64 // match lighting locally over windows of this fraction of the diagonal (0=off)
 	ColorWeight    float64 // weight of CIELAB a/b distance relative to lightness (0 = luma only)
 	ShiftTol       int     // tolerate ±N px residual misalignment (0=off)
 	BorderPct      float64 // ignore this fraction of each edge (0=off)
@@ -104,6 +105,9 @@ func PrepareImages(before, after *image.NRGBA, opts DiffOptions) (*image.NRGBA, 
 	case opts.NormalizeLuma:
 		b = NormalizeLuma(b)
 		a = NormalizeLuma(a)
+	}
+	if opts.LocalLight > 0 {
+		b = MatchLocalLight(b, a, opts.Valid, opts.LocalLight)
 	}
 	if opts.PreBlurSigma > 0 {
 		b = GaussianBlurNRGBA(b, opts.PreBlurSigma)

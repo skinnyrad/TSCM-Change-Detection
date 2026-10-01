@@ -91,6 +91,36 @@ func TestMatchIntensityCancelsExposureChange(t *testing.T) {
 	}
 }
 
+func TestLocalLightCancelsUnevenLightingButKeepsObjects(t *testing.T) {
+	// A lamp on the left: the after image brightens smoothly from right to left.
+	before := textured(240, 160, 5)
+	lit := image.NewNRGBA(before.Bounds())
+	for y := 0; y < 160; y++ {
+		for x := 0; x < 240; x++ {
+			g := 1.3 - 0.6*float64(x)/239
+			i := y*lit.Stride + x*4
+			for c := 0; c < 3; c++ {
+				lit.Pix[i+c] = clampU8(float64(before.Pix[i+c]) * g)
+			}
+			lit.Pix[i+3] = 255
+		}
+	}
+	opts := defaultOpts()
+	if n := len(Regions(ComputeDiffV2(before, lit, opts).Mask)); n == 0 {
+		t.Fatal("uneven lighting should defeat a global exposure fit (test is not exercising anything)")
+	}
+	opts.LocalLight = 0.2
+	if n := len(Regions(ComputeDiffV2(before, lit, opts).Mask)); n != 0 {
+		t.Fatalf("uneven lighting produced %d regions with local light matching", n)
+	}
+	box := image.Rect(150, 60, 180, 90)
+	after := paint(lit, box, color.NRGBA{20, 20, 230, 255})
+	regions := RankRegions(ComputeDiffV2(before, after, opts).Diff, ComputeDiffV2(before, after, opts).Mask)
+	if len(regions) != 1 || iou(regions[0].Box, box) < 0.6 {
+		t.Fatalf("object not found under local light matching: %+v", regions)
+	}
+}
+
 func TestIgnoreAndValidMasks(t *testing.T) {
 	before := textured(200, 160, 4)
 	box := image.Rect(60, 50, 110, 100)

@@ -12,6 +12,7 @@ export interface DetectionSettings {
   colorAware: boolean; // include chroma (catches colour-only changes)
   shiftTolerance: number; // ±px residual misalignment tolerated
   adaptiveThreshold: boolean; // derive threshold from the noise floor
+  localLight: boolean; // match lighting locally (shading, lamps, uneven white balance)
   highlightColor: string;
   highlightAlpha: number; // 0–100
   ignore: IgnoreRect[];
@@ -28,6 +29,7 @@ export const DEFAULT_SETTINGS: DetectionSettings = {
   colorAware: true,
   shiftTolerance: 0,
   adaptiveThreshold: false,
+  localLight: false,
   highlightColor: '#ff3c3c',
   highlightAlpha: 55,
   ignore: [],
@@ -63,6 +65,7 @@ export function toForm(s: DetectionSettings, withHighlight = false): FormData {
   fd.append('match_intensity', s.matchIntensity ? '1' : '0');
   fd.append('color_weight', s.colorAware ? '1' : '0');
   fd.append('shift_tol', String(s.shiftTolerance));
+  fd.append('local_light', s.localLight ? '1' : '0');
   if (s.ignore.length > 0) fd.append('ignore', JSON.stringify(s.ignore));
   if (withHighlight) {
     const [r, g, b] = hexToRgb(s.highlightColor);

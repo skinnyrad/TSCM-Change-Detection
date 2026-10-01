@@ -35,5 +35,6 @@ export function panBy(v: View, dx: number, dy: number, w: number, h: number): Vi
 
 /** The visible part of a w×h content, in fractions (0–1) of its size. */
 export function visibleRect(v: View, w: number, h: number): { x: number; y: number; w: number; h: number } {
-  return { x: -v.x / (v.s * w), y: -v.y / (v.s * h), w: 1 / v.s, h: 1 / v.s };
+  // `|| 0` turns -0 (from negating an un-panned 0) into 0.
+  return { x: -v.x / (v.s * w) || 0, y: -v.y / (v.s * h) || 0, w: 1 / v.s, h: 1 / v.s };
 }

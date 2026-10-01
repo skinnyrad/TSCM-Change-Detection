@@ -42,12 +42,7 @@ func TestEvalLab(t *testing.T) {
 	}
 	sort.Strings(labs)
 
-	cfg := parseCfg(os.Getenv("CFG"))
-	opts := DiffOptions{
-		Threshold: uint8(cfg["thr"]), AutoThreshold: cfg["athr"] > 0, MorphSize: 5, CloseSize: 3, MinRegion: 25,
-		PreBlurSigma: 1.5, NormalizeLuma: cfg["match"] == 0, MatchIntensity: cfg["match"] > 0,
-		ColorWeight: float64(cfg["color"]) / 10, ShiftTol: cfg["shift"], BorderPct: float64(cfg["border"]) / 1000,
-	}
+	cfg, opts := evalOpts(os.Getenv("CFG"))
 	t.Logf("cfg=%v", cfg)
 	var totRef, totHit, totDet, totMatched int
 	for _, lab := range labs {
@@ -117,16 +112,21 @@ func loadNRGBA(path string) (*image.NRGBA, error) {
 	return ToNRGBA(img), nil
 }
 
-// parseCfg reads "key=val,key=val" with defaults for the harness knobs:
-// reg (auto-register), match (intensity match), color (Lab a/b weight ×10),
-// shift (px tolerance), athr (auto threshold), thr, border (‰).
-func parseCfg(s string) map[string]int {
-	cfg := map[string]int{"thr": 60}
+// evalOpts reads "key=val,key=val" over the UI's default settings (lib/settings.ts):
+// reg (auto-register), local, match (intensity match), color (Lab a/b weight ×10),
+// shift (px tolerance), athr (adaptive threshold), thr, border (‰), open, close,
+// minreg, blur (σ×10), light (local lighting window, ‰ of the diagonal).
+func evalOpts(s string) (map[string]int, DiffOptions) {
+	cfg := map[string]int{"reg": 1, "match": 1, "color": 10, "thr": 25, "border": 10, "open": 7, "close": 5, "minreg": 50, "blur": 20}
 	for _, kv := range strings.Split(s, ",") {
 		if k, v, ok := strings.Cut(kv, "="); ok {
-			n, _ := strconv.Atoi(v)
-			cfg[k] = n
+			cfg[k], _ = strconv.Atoi(v)
 		}
 	}
-	return cfg
+	return cfg, DiffOptions{
+		Threshold: uint8(cfg["thr"]), AutoThreshold: cfg["athr"] > 0, MorphSize: cfg["open"], CloseSize: cfg["close"],
+		MinRegion: cfg["minreg"], PreBlurSigma: float64(cfg["blur"]) / 10, NormalizeLuma: true, MatchIntensity: cfg["match"] > 0,
+		ColorWeight: float64(cfg["color"]) / 10, ShiftTol: cfg["shift"], BorderPct: float64(cfg["border"]) / 1000,
+		LocalLight: float64(cfg["light"]) / 1000,
+	}
 }

@@ -51,6 +51,7 @@ export function ResultImage({ src, caption, compare = [], overlay, zoomKey, panD
     onNext: () => step(1),
     onToggle: () => step(1),
     spaceToggles: true,
+    scope: ref,
   });
 
   const current = frames[Math.min(index, last)] ?? { label: caption, src };

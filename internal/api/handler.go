@@ -150,6 +150,14 @@ func HandleClearBaselines(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"baselines": 0})
 }
 
+// HandleGetRegistration reports the current alignment settings, so the UI
+// shows the server's state rather than assuming the defaults.
+// GET /api/registration
+func HandleGetRegistration(c *gin.Context) {
+	st := state.Global.Settings()
+	c.JSON(http.StatusOK, gin.H{"auto": st.AutoRegister, "local": st.LocalRefine})
+}
+
 // HandleRegistration changes alignment settings and re-registers the pair.
 // POST /api/registration — form: auto=0|1, local=0|1
 func HandleRegistration(c *gin.Context) {
@@ -434,6 +442,7 @@ func parseDiffOpts(c *gin.Context, an state.Analysis) imgproc.DiffOptions {
 		MatchIntensity: c.PostForm("match_intensity") != "0",
 		ColorWeight:    clampFloat(parseFloatDefault(c.PostForm("color_weight"), 1.0), 0, 4),
 		ShiftTol:       clampInt(parseIntDefault(c.PostForm("shift_tol"), 0), 0, 4),
+		LocalLight:     localLightFrac(c.PostForm("local_light")),
 		BorderPct:      clampFloat(parseFloatDefault(c.PostForm("border_pct"), 0.01), 0, 0.2),
 		Valid:          an.Valid,
 		Spread:         an.Spread,
@@ -448,6 +457,18 @@ func parseDiffOpts(c *gin.Context, an state.Analysis) imgproc.DiffOptions {
 		}
 	}
 	return opts
+}
+
+// localLightWindow is the local lighting window as a fraction of the image
+// diagonal. Picked on the lab and VL-CMU-CD (see TestEvalMasks): it removes
+// shading without costing lab recall.
+const localLightWindow = 0.12
+
+func localLightFrac(v string) float64 {
+	if v == "1" {
+		return localLightWindow
+	}
+	return 0
 }
 
 // decodeFormImage reads the uploaded file (size-capped), rejects absurd

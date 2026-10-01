@@ -32,6 +32,7 @@ func main() {
 	apiGroup.POST("/upload/after", api.HandleUploadAfter)
 	apiGroup.POST("/upload/baseline", api.HandleUploadBaseline)
 	apiGroup.POST("/baselines/clear", api.HandleClearBaselines)
+	apiGroup.GET("/registration", api.HandleGetRegistration)
 	apiGroup.POST("/registration", api.HandleRegistration)
 	apiGroup.POST("/analyze", api.HandleAnalyze)
 	apiGroup.POST("/analyze/alternate", api.HandleAnalyzeAlternate)

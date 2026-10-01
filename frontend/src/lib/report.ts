@@ -39,6 +39,7 @@ export function buildReportHtml(i: ReportInput): string {
     ['Min region size', `${s.minRegion} px`],
     ['Pre-blur σ', String(s.preBlurSigma)],
     ['Exposure matching', s.matchIntensity ? 'on' : 'off'],
+    ['Even out lighting', s.localLight ? 'on' : 'off'],
     ['Colour-aware', s.colorAware ? 'on' : 'off'],
     ['Shift tolerance', `±${s.shiftTolerance} px`],
     ['Baselines combined', String(a.baselines)],

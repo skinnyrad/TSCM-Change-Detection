@@ -26,6 +26,7 @@ func testRouter() *gin.Engine {
 	g.POST("/upload/after", HandleUploadAfter)
 	g.POST("/upload/baseline", HandleUploadBaseline)
 	g.POST("/baselines/clear", HandleClearBaselines)
+	g.GET("/registration", HandleGetRegistration)
 	g.POST("/registration", HandleRegistration)
 	g.POST("/analyze", HandleAnalyze)
 	g.POST("/analyze/alternate", HandleAnalyzeAlternate)
@@ -163,5 +164,27 @@ func TestConcurrentUploadsStayConsistent(t *testing.T) {
 	upload(t, r, "/api/upload/after", b)
 	if w := post(r, "/api/analyze", nil); w.Code != 200 {
 		t.Fatalf("final analyze: %d", w.Code)
+	}
+}
+
+func TestRegistrationSettingRoundTrips(t *testing.T) {
+	state.Global = &state.Store{}
+	r := testRouter()
+	get := func() map[string]bool {
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, httptest.NewRequest("GET", "/api/registration", nil))
+		var got map[string]bool
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+	for _, auto := range []string{"1", "0"} {
+		if w := post(r, "/api/registration", url.Values{"auto": {auto}}); w.Code != http.StatusOK {
+			t.Fatalf("POST auto=%s: %d", auto, w.Code)
+		}
+		if got := get(); got["auto"] != (auto == "1") {
+			t.Fatalf("after auto=%s, GET reports %v", auto, got)
+		}
 	}
 }

@@ -37,6 +37,9 @@ interface ChangeDetectionTabProps {
   afterFile: File | null;
   /** Called after a server-side alignment setting changed, so analysis re-runs. */
   onRefresh: () => void;
+  /** Server-side auto-alignment setting; owned by App so it survives tab switches. */
+  autoAlign: boolean;
+  onAutoAlign: (v: boolean) => void;
 }
 
 function Labeled({ label, children, min = 160 }: { label: string; children: React.ReactNode; min?: number }) {
@@ -59,10 +62,9 @@ function Toggle({ label, checked, onChange, hint }: { label: string; checked: bo
 }
 
 export function ChangeDetectionTab({
-  ready, imageKey, settings, onSettings, beforeUrl, afterUrl, beforeFile, afterFile, onRefresh,
+  ready, imageKey, settings, onSettings, beforeUrl, afterUrl, beforeFile, afterFile, onRefresh, autoAlign, onAutoAlign,
 }: ChangeDetectionTabProps) {
   const { data, loading, error, analyze } = useAnalyze(settings, ready);
-  const [autoAlign, setAutoAlign] = useState(true);
   const [drawing, setDrawing] = useState(false);
   const [selectedRank, setSelectedRank] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -80,14 +82,14 @@ export function ChangeDetectionTab({
   const compare = useMemo(() => [{ label: 'Before', src: beforeUrl }, { label: 'After', src: afterUrl }], [beforeUrl, afterUrl]);
 
   const changeAutoAlign = async (v: boolean) => {
-    setAutoAlign(v);
+    onAutoAlign(v);
     try {
       const fd = new FormData();
       fd.append('auto', v ? '1' : '0');
       await postForm('/api/registration', fd);
       onRefresh();
     } catch {
-      setAutoAlign(!v);
+      onAutoAlign(!v);
     }
   };
 
@@ -181,6 +183,11 @@ export function ChangeDetectionTab({
           label="Adaptive threshold" checked={settings.adaptiveThreshold}
           onChange={v => onSettings({ adaptiveThreshold: v })}
           hint="Set the threshold from each image pair's own noise level; Strength then only tunes it"
+        />
+        <Toggle
+          label="Even out lighting" checked={settings.localLight}
+          onChange={v => onSettings({ localLight: v })}
+          hint="Correct lighting that differs across the frame (a lamp switched on, sun through a window, shadows) so it isn't flagged. Very large changes can be softened."
         />
         <Button
           size="small" variant={drawing ? 'contained' : 'outlined'} color="warning"

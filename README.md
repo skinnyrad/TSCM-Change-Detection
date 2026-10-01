@@ -175,7 +175,8 @@ The result zooms the same way as the comparison view (pinch, `⌘`/`Ctrl`+scroll
 - **Noise Reduction (1–15, default 7×7)** — removes specks smaller than this before counting changes.
 - **Highlight Color** and **Highlight Opacity** — how changes are drawn.
 - **Auto-align photos** — automatic alignment on/off (see above).
-- **Adaptive threshold** — sets the detection threshold from each pair's own noise level instead of a fixed number; Detection Strength then fine-tunes it. Useful when image quality varies.
+- **Adaptive threshold** — sets the detection threshold from each pair's own noise level instead of a fixed number; Detection Strength then fine-tunes it. Useful when image quality varies. On pairs that differ almost everywhere (different season, weather or time of day) the noise level is high, so it flags only the strongest changes.
+- **Even out lighting** — corrects lighting that differs across the frame (a lamp switched on, sun through a window, a moving shadow), which Match exposure can't, because it applies one correction to the whole image. Changed objects are left out of the correction so they keep their contrast, but a change covering a large part of the frame can be softened. On outdoor test sets it removed roughly a third to a half of the flagged area without costing recall on the change-detection lab.
 - **Mark ignore zones** — drag rectangles over areas that legitimately change (TV and computer screens, windows, clocks). They are excluded from detection and reports. Remove one with its ×, or all with the chip that appears.
 - **Export report** — saves a self-contained HTML file (open it in a browser and print to PDF) with both images, the highlighted result, every finding with a crop, the settings used, and SHA-256 hashes of both source files for chain-of-custody records.
 
@@ -250,6 +251,7 @@ Use this mode when you have **many photos of the same scene** — repeated sweep
 - Keep lighting consistent where you can. Exposure and white-balance differences are corrected automatically, but moving shadows and lamps turning on or off are real visual changes.
 - Take **several Before shots** of important areas and add them as extra baselines, or use Batch mode — the tool then learns what normally varies.
 - Mark **ignore zones** over screens, windows and anything else that is expected to change.
-- If there are too many false positives, lower Detection Strength, raise Noise Reduction or Pre-blur, or add 1 px of Shift Tolerance. If real changes are missed, raise Detection Strength or turn on Adaptive threshold.
+- If there are too many false positives, lower Detection Strength, raise Noise Reduction or Pre-blur, or add 1 px of Shift Tolerance. If lighting changed between the sweeps, turn on Even out lighting. If real changes are missed, raise Detection Strength (and turn Adaptive threshold off).
+- Detection compares appearance pixel by pixel, so it works best when both sweeps are taken from the same spots under similar lighting. Photos taken in different seasons or weather, or from noticeably different viewpoints, will show many changes that are real differences in appearance but not meaningful ones.
 - When automatic alignment reports that it was rejected, use the alignment dialog: Auto Align, check the points, and apply.
 - Use **Alternate Analysis** to cross-check: the heatmap shows severity, channel subtraction reveals colour changes, and the edge map shows structural outlines.

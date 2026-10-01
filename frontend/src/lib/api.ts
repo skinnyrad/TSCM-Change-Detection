@@ -20,6 +20,10 @@ export async function postForm<T>(path: string, body?: FormData, signal?: AbortS
   return parse<T>(await fetch(path, { method: 'POST', body, signal }));
 }
 
+export async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return parse<T>(await fetch(path, { signal }));
+}
+
 export async function postBlob(path: string, body: FormData): Promise<Blob> {
   const res = await fetch(path, { method: 'POST', body });
   if (!res.ok) {

@@ -123,16 +123,14 @@ function Inspector({ im, anomalous, onPrev, onNext, onClose }: {
 }) {
   const [showHeat, setShowHeat] = useState(true);
   const [selectedRank, setSelectedRank] = useState<number | null>(null);
-  // ←/→ step between images while not fullscreen (fullscreen uses them to flip image/reference).
-  useFlipKeys({
-    enabled: true,
-    onPrev: () => { if (!document.fullscreenElement) onPrev(); },
-    onNext: () => { if (!document.fullscreenElement) onNext(); },
-  });
+  // ←/→ step between images. Scoped to the inspector, so in fullscreen (where
+  // the viewer flips image/reference) this handler stays out of the way.
+  const root = useRef<HTMLDivElement>(null);
+  useFlipKeys({ enabled: true, onPrev, onNext, scope: root });
   const compare = useMemo(() => [{ label: 'Golden reference (typical scene)', src: REFERENCE_URL }], []);
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+    <Paper ref={root} variant="outlined" sx={{ p: 2, mb: 3 }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
         <IconButton aria-label="Previous image" onClick={onPrev}><KeyboardArrowLeftRoundedIcon /></IconButton>
         <IconButton aria-label="Next image" onClick={onNext}><KeyboardArrowRightRoundedIcon /></IconButton>

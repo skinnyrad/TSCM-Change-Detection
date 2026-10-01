@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Container from '@mui/material/Container';
@@ -26,7 +26,7 @@ import { useUpload } from './hooks/useUpload';
 import { BatchPage } from './components/BatchPage';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import { postForm } from './lib/api';
+import { getJson, postForm } from './lib/api';
 import { DEFAULT_SETTINGS, type DetectionSettings } from './lib/settings';
 
 const darkTheme = createTheme({
@@ -51,6 +51,12 @@ export function App() {
   const [activeTab, setActiveTab] = useState(0);
   const [mode, setMode] = useState<'pair' | 'batch'>('pair');
   const [settings, setSettings] = useState<DetectionSettings>(DEFAULT_SETTINGS);
+  // Auto-align lives on the server; mirror it here (not in the tab, which
+  // unmounts on tab switches) and read it once in case it was changed earlier.
+  const [autoAlign, setAutoAlign] = useState(true);
+  useEffect(() => {
+    getJson<{ auto: boolean }>('/api/registration').then(r => setAutoAlign(r.auto)).catch(() => {});
+  }, []);
   const patchSettings = useCallback((p: Partial<DetectionSettings>) => setSettings(s => ({ ...s, ...p })), []);
 
   const {
@@ -177,6 +183,8 @@ export function App() {
                   beforeFile={before}
                   afterFile={after}
                   onRefresh={refresh}
+                  autoAlign={autoAlign}
+                  onAutoAlign={setAutoAlign}
                 />
               )}
               {activeTab === 2 && <AlternateAnalysisTab ready={ready} imageKey={imageKey} settings={settings} />}

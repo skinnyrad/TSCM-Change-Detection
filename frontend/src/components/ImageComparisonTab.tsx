@@ -234,6 +234,7 @@ export function ImageComparisonTab({ beforeUrl, afterUrl }: ImageComparisonTabPr
     onNext: () => showSide(true),
     onToggle: () => showSide(!isAfter),
     spaceToggles: active,
+    scope: ref,
   });
 
   const maxHeight = active ? FULLSCREEN_MAX_HEIGHT : NORMAL_MAX_HEIGHT;
