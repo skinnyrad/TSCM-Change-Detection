@@ -11,8 +11,14 @@ import (
 const (
 	autoHomographyMaxDim    = 960
 	autoHomographyPatchSize = 11
-	autoHomographyMaxPoints = 160
+	autoHomographyMaxPoints = 500
 	autoHomographyMinPoints = 4
+	autoMaxMatches          = 300
+	autoRatio               = 0.85
+	autoRansacIters         = 1500
+	autoRansacThresh        = 3.0
+	autoRefitThresh         = 2.5
+	autoRansacSeed          = 7
 )
 
 // AutoPointPair is a candidate correspondence between the raw before and after images.
@@ -37,15 +43,30 @@ type autoFeature struct {
 }
 
 type autoMatch struct {
-	SrcIndex  int
-	DstIndex  int
-	Score     float64
-	Distance  float64
-	ReprojErr float64
+	SrcIndex int
+	DstIndex int
+	Score    float64
+	Distance float64
 }
 
-// AutoDetectHomography finds 4-8 correspondence pairs that can seed manual warp review.
-func AutoDetectHomography(before, after *image.NRGBA) (*AutoHomographyResult, error) {
+// autoEstimate is the full result of feature-based alignment, in the
+// coordinates of the (possibly downsampled) working images.
+type autoEstimate struct {
+	bGray, aGray         *image.Gray // working-resolution grayscale
+	hWork                [9]float64  // before → after, working coordinates
+	bFeatures, aFeatures []autoFeature
+	matches              []autoMatch
+	inliers              []int
+	avgErr               float64
+	h                    [9]float64 // before → after, full-resolution coordinates
+	bScaleX, bScaleY     float64
+	aScaleX, aScaleY     float64
+	confidence           float64
+}
+
+// estimateAuto detects features, matches them, and fits a homography with
+// RANSAC followed by a refit on all inliers.
+func estimateAuto(before, after *image.NRGBA) (*autoEstimate, error) {
 	if before == nil || after == nil {
 		return nil, fmt.Errorf("images not ready")
 	}
@@ -53,9 +74,7 @@ func AutoDetectHomography(before, after *image.NRGBA) (*AutoHomographyResult, er
 	bScaled, bScaleX, bScaleY := downsampleWithScale(before, autoHomographyMaxDim)
 	aScaled, aScaleX, aScaleY := downsampleWithScale(after, autoHomographyMaxDim)
 
-	bGray := toGray(bScaled)
-	aGray := toGray(aScaled)
-
+	bGray, aGray := toGray(bScaled), toGray(aScaled)
 	bFeatures := detectAutoFeatures(bGray, autoHomographyMaxPoints)
 	aFeatures := detectAutoFeatures(aGray, autoHomographyMaxPoints)
 	if len(bFeatures) < autoHomographyMinPoints || len(aFeatures) < autoHomographyMinPoints {
@@ -67,37 +86,47 @@ func AutoDetectHomography(before, after *image.NRGBA) (*AutoHomographyResult, er
 		return nil, fmt.Errorf("could not find enough matching points for auto alignment")
 	}
 
-	inliers, avgErr, err := ransacAutoHomography(bFeatures, aFeatures, matches)
+	inliers, avgErr, h, err := ransacAutoHomography(bFeatures, aFeatures, matches)
 	if err != nil {
 		return nil, err
 	}
-	if len(inliers) < autoHomographyMinPoints {
+
+	// Convert H from working-image coordinates to full-resolution coordinates:
+	// Hfull = Sa · H · Sb⁻¹.
+	sa := mat3{aScaleX, 0, 0, 0, aScaleY, 0, 0, 0, 1}
+	sbInv := mat3{1 / bScaleX, 0, 0, 0, 1 / bScaleY, 0, 0, 0, 1}
+	hf := mat3Mul(mat3Mul(sa, mat3(h)), sbInv)
+	if math.Abs(hf[8]) > 1e-15 {
+		for i := range hf {
+			hf[i] /= hf[8]
+		}
+	}
+
+	confidence := clampUnit((float64(len(inliers)) / float64(len(matches)) * 0.65) + (1/(1+avgErr))*0.35)
+	return &autoEstimate{
+		bGray: bGray, aGray: aGray, hWork: h,
+		bFeatures: bFeatures, aFeatures: aFeatures, matches: matches,
+		inliers: inliers, avgErr: avgErr, h: [9]float64(hf),
+		bScaleX: bScaleX, bScaleY: bScaleY, aScaleX: aScaleX, aScaleY: aScaleY,
+		confidence: confidence,
+	}, nil
+}
+
+// AutoDetectHomography finds 4-8 correspondence pairs that can seed manual warp review.
+func AutoDetectHomography(before, after *image.NRGBA) (*AutoHomographyResult, error) {
+	est, err := estimateAuto(before, after)
+	if err != nil {
+		return nil, err
+	}
+	pairs := selectTiePoints(est, 8)
+	if len(pairs) < autoHomographyMinPoints {
 		return nil, fmt.Errorf("auto alignment confidence too low")
 	}
-
-	selected := selectSpreadMatches(bFeatures, matches, inliers, 8)
-	if len(selected) < autoHomographyMinPoints {
-		return nil, fmt.Errorf("auto alignment confidence too low")
-	}
-
-	pairs := make([]AutoPointPair, 0, len(selected))
-	for _, idx := range selected {
-		match := matches[idx]
-		src := bFeatures[match.SrcIndex].Point
-		dst := aFeatures[match.DstIndex].Point
-		pairs = append(pairs, AutoPointPair{
-			Src: Point{X: src.X * bScaleX, Y: src.Y * bScaleY},
-			Dst: Point{X: dst.X * aScaleX, Y: dst.Y * aScaleY},
-			Score: clampUnit((match.Score + match.ReprojErrScore()) / 2),
-		})
-	}
-
-	confidence := clampUnit((float64(len(inliers))/float64(len(matches))*0.65) + (1/(1+avgErr))*0.35)
 	return &AutoHomographyResult{
 		Pairs:       pairs,
-		Confidence:  confidence,
-		MatchCount:  len(matches),
-		InlierCount: len(inliers),
+		Confidence:  est.confidence,
+		MatchCount:  len(est.matches),
+		InlierCount: len(est.inliers),
 	}, nil
 }
 
@@ -151,51 +180,82 @@ func detectAutoFeatures(gray *image.Gray, limit int) []autoFeature {
 		}
 	}
 
+	return selectCornerCandidates(gray, responses, w, h, margin, patchRadius, limit)
+}
+
+// selectCornerCandidates keeps Harris peaks with a threshold relative to the
+// strongest corner in each grid cell rather than in the whole image. A single
+// global threshold lets high-contrast clutter (dark chairs on a white wall,
+// bottles) suppress every lower-contrast but stable corner — cabinet and door
+// frames, ceiling fixtures — so features, and therefore tie points, pile up on
+// the busiest spot. Each cell gets an equal quota first; leftover capacity is
+// filled by the strongest remaining corners anywhere.
+func selectCornerCandidates(gray *image.Gray, responses []float64, w, h, margin, patchRadius, limit int) []autoFeature {
+	const gridX, gridY = 6, 5
 	maxResp := 0.0
-	for _, resp := range responses {
-		if resp > maxResp {
-			maxResp = resp
+	cellMax := make([]float64, gridX*gridY)
+	cellOf := func(x, y int) int { return min(y*gridY/h, gridY-1)*gridX + min(x*gridX/w, gridX-1) }
+	for y := margin; y < h-margin; y++ {
+		for x := margin; x < w-margin; x++ {
+			r := responses[y*w+x]
+			maxResp = math.Max(maxResp, r)
+			c := cellOf(x, y)
+			cellMax[c] = math.Max(cellMax[c], r)
 		}
 	}
 	if maxResp <= 0 {
 		return nil
 	}
-	threshold := maxResp * 0.08
 
 	type candidate struct {
-		x, y  int
-		score float64
+		x, y, cell int
+		score      float64
 	}
-	candidates := make([]candidate, 0, limit*4)
+	var candidates []candidate
 	for y := margin; y < h-margin; y++ {
 		for x := margin; x < w-margin; x++ {
 			resp := responses[y*w+x]
-			if resp < threshold || !isLocalPeak(responses, w, h, x, y, 2) {
+			c := cellOf(x, y)
+			// Relative to the local maximum, with a small global floor so
+			// flat cells (bare wall, sky) don't promote noise.
+			if resp < math.Max(cellMax[c]*0.05, maxResp*0.0005) || !isLocalPeak(responses, w, h, x, y, 2) {
 				continue
 			}
-			descriptor := makePatchDescriptor(gray, x, y, patchRadius)
-			if descriptor == nil {
-				continue
-			}
-			candidates = append(candidates, candidate{x: x, y: y, score: resp})
+			candidates = append(candidates, candidate{x: x, y: y, cell: c, score: resp})
 		}
 	}
-
 	sort.Slice(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
-	selected := make([]autoFeature, 0, minInt(limit, len(candidates)))
-	minDist := math.Max(8, float64(minInt(w, h))/18)
-	for _, candidate := range candidates {
-		point := Point{X: float64(candidate.x), Y: float64(candidate.y)}
+
+	minDist := math.Max(6, float64(minInt(w, h))/80)
+	selected := make([]autoFeature, 0, limit)
+	used := make([]bool, len(candidates))
+	take := func(i int) bool {
+		c := candidates[i]
+		point := Point{X: float64(c.x), Y: float64(c.y)}
 		if tooCloseToExisting(selected, point, minDist) {
-			continue
+			return false
 		}
-		descriptor := makePatchDescriptor(gray, candidate.x, candidate.y, patchRadius)
+		descriptor := makePatchDescriptor(gray, c.x, c.y, patchRadius)
 		if descriptor == nil {
-			continue
+			return false
 		}
-		selected = append(selected, autoFeature{Point: point, Score: candidate.score, Descriptor: descriptor})
-		if len(selected) == limit {
+		selected = append(selected, autoFeature{Point: point, Score: c.score, Descriptor: descriptor})
+		return true
+	}
+	quota := limit / (gridX * gridY)
+	perCell := make([]int, gridX*gridY)
+	for i, c := range candidates {
+		if perCell[c.cell] < quota && take(i) {
+			perCell[c.cell]++
+			used[i] = true
+		}
+	}
+	for i := range candidates {
+		if len(selected) >= limit {
 			break
+		}
+		if !used[i] {
+			take(i)
 		}
 	}
 	return selected
@@ -254,7 +314,7 @@ func matchAutoFeatures(before, after []autoFeature) []autoMatch {
 				secondDist, secondIdx = distance, dstIdx
 			}
 		}
-		if bestIdx == -1 || secondIdx == -1 || bestDist >= secondDist*0.92 {
+		if bestIdx == -1 || secondIdx == -1 || bestDist >= secondDist*autoRatio {
 			continue
 		}
 		if bestDist < reverseDist[bestIdx] {
@@ -276,8 +336,8 @@ func matchAutoFeatures(before, after []autoFeature) []autoMatch {
 		}
 		return matches[i].Score > matches[j].Score
 	})
-	if len(matches) > 48 {
-		matches = matches[:48]
+	if len(matches) > autoMaxMatches {
+		matches = matches[:autoMaxMatches]
 	}
 	return matches
 }
@@ -291,20 +351,17 @@ func descriptorDistance(a, b []float64) float64 {
 	return sum / float64(len(a))
 }
 
-func ransacAutoHomography(before, after []autoFeature, matches []autoMatch) ([]int, float64, error) {
+func ransacAutoHomography(before, after []autoFeature, matches []autoMatch) ([]int, float64, [9]float64, error) {
+	var zero [9]float64
 	if len(matches) < autoHomographyMinPoints {
-		return nil, 0, fmt.Errorf("could not find enough matching points for auto alignment")
+		return nil, 0, zero, fmt.Errorf("could not find enough matching points for auto alignment")
 	}
 
-	rng := rand.New(rand.NewSource(7))
+	rng := rand.New(rand.NewSource(autoRansacSeed))
 	bestInliers := make([]int, 0)
 	bestAvgErr := math.MaxFloat64
-	iterations := 320
-	if len(matches) < 8 {
-		iterations = 120
-	}
 
-	for i := 0; i < iterations; i++ {
+	for i := 0; i < autoRansacIters; i++ {
 		sampleIdx := sampleMatchIndices(rng, len(matches), 4)
 		srcPts := make([]Point, 0, 4)
 		dstPts := make([]Point, 0, 4)
@@ -318,7 +375,7 @@ func ransacAutoHomography(before, after []autoFeature, matches []autoMatch) ([]i
 			continue
 		}
 
-		inliers, avgErr := scoreHomography(h, before, after, matches, 5.0)
+		inliers, avgErr := scoreHomography(h, before, after, matches, autoRansacThresh)
 		if len(inliers) > len(bestInliers) || (len(inliers) == len(bestInliers) && avgErr < bestAvgErr) {
 			bestInliers = inliers
 			bestAvgErr = avgErr
@@ -326,29 +383,33 @@ func ransacAutoHomography(before, after []autoFeature, matches []autoMatch) ([]i
 	}
 
 	if len(bestInliers) < autoHomographyMinPoints {
-		return nil, 0, fmt.Errorf("auto alignment confidence too low")
+		return nil, 0, zero, fmt.Errorf("auto alignment confidence too low")
 	}
 
-	srcPts := make([]Point, 0, len(bestInliers))
-	dstPts := make([]Point, 0, len(bestInliers))
-	for _, idx := range bestInliers {
-		match := matches[idx]
-		srcPts = append(srcPts, before[match.SrcIndex].Point)
-		dstPts = append(dstPts, after[match.DstIndex].Point)
+	// Refit on all inliers, then re-score (twice) so the final model uses every
+	// supporting correspondence rather than a 4-point sample.
+	var h [9]float64
+	finalInliers := bestInliers
+	var avgErr float64
+	for round := 0; round < 2; round++ {
+		srcPts := make([]Point, 0, len(finalInliers))
+		dstPts := make([]Point, 0, len(finalInliers))
+		for _, idx := range finalInliers {
+			match := matches[idx]
+			srcPts = append(srcPts, before[match.SrcIndex].Point)
+			dstPts = append(dstPts, after[match.DstIndex].Point)
+		}
+		var err error
+		h, err = computeHomography(srcPts, dstPts)
+		if err != nil {
+			return nil, 0, zero, fmt.Errorf("auto alignment confidence too low")
+		}
+		finalInliers, avgErr = scoreHomography(h, before, after, matches, autoRefitThresh)
+		if len(finalInliers) < autoHomographyMinPoints {
+			return nil, 0, zero, fmt.Errorf("auto alignment confidence too low")
+		}
 	}
-	h, err := computeHomography(srcPts, dstPts)
-	if err != nil {
-		return nil, 0, fmt.Errorf("auto alignment confidence too low")
-	}
-	finalInliers, avgErr := scoreHomography(h, before, after, matches, 4.5)
-	if len(finalInliers) < autoHomographyMinPoints {
-		return nil, 0, fmt.Errorf("auto alignment confidence too low")
-	}
-	for _, idx := range finalInliers {
-		match := &matches[idx]
-		match.ReprojErr = reprojectionError(h, before[match.SrcIndex].Point, after[match.DstIndex].Point)
-	}
-	return finalInliers, avgErr, nil
+	return finalInliers, avgErr, h, nil
 }
 
 func scoreHomography(h [9]float64, before, after []autoFeature, matches []autoMatch, threshold float64) ([]int, float64) {
@@ -365,68 +426,6 @@ func scoreHomography(h [9]float64, before, after []autoFeature, matches []autoMa
 		return nil, math.MaxFloat64
 	}
 	return inliers, errSum / float64(len(inliers))
-}
-
-func selectSpreadMatches(features []autoFeature, matches []autoMatch, inliers []int, limit int) []int {
-	type rankedMatch struct {
-		idx   int
-		score float64
-	}
-	ranked := make([]rankedMatch, 0, len(inliers))
-	for _, idx := range inliers {
-		match := matches[idx]
-		ranked = append(ranked, rankedMatch{idx: idx, score: clampUnit((match.Score + match.ReprojErrScore()) / 2)})
-	}
-	sort.Slice(ranked, func(i, j int) bool {
-		if ranked[i].score == ranked[j].score {
-			return ranked[i].idx < ranked[j].idx
-		}
-		return ranked[i].score > ranked[j].score
-	})
-
-	selected := make([]int, 0, minInt(limit, len(ranked)))
-	minDist := 14.0
-	for pass := 0; pass < 4 && len(selected) < autoHomographyMinPoints; pass++ {
-		selected = selected[:0]
-		currentMinDist := minDist / math.Pow(1.35, float64(pass))
-		for _, candidate := range ranked {
-			match := matches[candidate.idx]
-			point := features[match.SrcIndex].Point
-			if tooCloseMatch(features, matches, selected, point, currentMinDist) {
-				continue
-			}
-			selected = append(selected, candidate.idx)
-			if len(selected) == limit {
-				return selected
-			}
-		}
-	}
-	if len(selected) == 0 {
-		for _, candidate := range ranked {
-			selected = append(selected, candidate.idx)
-			if len(selected) == limit {
-				break
-			}
-		}
-	}
-	return selected
-}
-
-func tooCloseMatch(features []autoFeature, matches []autoMatch, selected []int, point Point, minDist float64) bool {
-	for _, idx := range selected {
-		other := features[matches[idx].SrcIndex].Point
-		if pointDistance(point, other) < minDist {
-			return true
-		}
-	}
-	return false
-}
-
-func (m autoMatch) ReprojErrScore() float64 {
-	if m.ReprojErr == 0 {
-		return 1
-	}
-	return 1 / (1 + m.ReprojErr)
 }
 
 func reprojectionError(h [9]float64, src, dst Point) float64 {

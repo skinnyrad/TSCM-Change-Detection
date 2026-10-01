@@ -1,34 +1,32 @@
-# dependencies (bun install)
-node_modules
+# Paths are relative to frontend/. A leading "/" anchors a rule to this folder;
+# without it the rule matches at any depth and could hide source files.
 
-# output
-out
-dist
+# dependencies (bun install)
+/node_modules/
+
+# build output
+/out/
+/dist/
 *.tgz
 
 # code coverage
-coverage
+/coverage/
 *.lcov
 
 # logs
-logs
-_.log
-report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
+/logs/
+*.log
 
 # dotenv environment variable files
 .env
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*.local
 .env.local
 
 # caches
 .eslintcache
-.cache
+/.cache/
 *.tsbuildinfo
 
-# IntelliJ based IDEs
-.idea
-
-# Finder (MacOS) folder config
+# editors / OS
+.idea/
 .DS_Store

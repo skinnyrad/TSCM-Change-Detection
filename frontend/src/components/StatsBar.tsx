@@ -10,7 +10,11 @@ interface StatsBarProps {
 
 export function StatsBar({ stats }: StatsBarProps) {
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 3 }}>
+    <Box
+      role="group"
+      aria-label={`${stats.pct}% of the image changed, ${stats.changed_px} changed pixels, ${stats.regions} distinct regions`}
+      sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, mb: 3 }}
+    >
       {/* Gauge for % changed */}
       <Paper variant="outlined" sx={{ p: 2, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <Gauge

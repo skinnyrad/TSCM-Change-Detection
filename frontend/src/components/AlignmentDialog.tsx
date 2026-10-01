@@ -16,6 +16,8 @@ import { useAutoWarp } from '../hooks/useAutoWarp';
 import { useWarp } from '../hooks/useWarp';
 import type { PointPair, Dims } from '../types/api';
 
+const visuallyHidden = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' } as const;
+
 interface AlignmentDialogProps {
   open: boolean;
   beforeUrl: string;
@@ -56,14 +58,16 @@ export function AlignmentDialog({ open, beforeUrl, afterUrl, beforeDims, afterDi
 
   const pendingIdx = pairs.findIndex(p => !p.src || !p.dst);
   const pendingSide: 'src' | 'dst' | null =
-    pendingIdx === -1 ? null : (!pairs[pendingIdx].src ? 'src' : 'dst');
+    pendingIdx === -1 ? null : (!pairs[pendingIdx]?.src ? 'src' : 'dst');
 
   const handlePoint = (side: 'src' | 'dst') => (relX: number, relY: number) => {
     setPairs(prev => {
       const idx = prev.findIndex(p => (side === 'src' ? !p.src : !p.dst));
       if (idx === -1) return prev;
+      const cur = prev[idx];
+      if (!cur) return prev;
       const next = [...prev];
-      next[idx] = { ...next[idx], [side]: { x: relX, y: relY } };
+      next[idx] = { ...cur, [side]: { x: relX, y: relY } };
       return next;
     });
   };
@@ -111,10 +115,12 @@ export function AlignmentDialog({ open, beforeUrl, afterUrl, beforeDims, afterDi
     <Dialog
       open={open}
       onClose={handleClose}
+      aria-labelledby="alignment-dialog-title"
       maxWidth={false}
       sx={{ '& .MuiDialog-paper': { maxHeight: '97vh', maxWidth: '96vw', m: 1.5 } }}
     >
       <DialogContent sx={{ p: 0, display: 'flex', overflow: 'hidden' }}>
+        <Typography id="alignment-dialog-title" sx={visuallyHidden}>Align Before image to After image</Typography>
 
         {/* ── Main image area ── */}
         <Box sx={{ p: 2, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>

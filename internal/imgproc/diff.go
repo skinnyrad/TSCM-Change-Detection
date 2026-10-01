@@ -7,16 +7,36 @@ import (
 	"github.com/anthonynsimon/bild/blur"
 )
 
-// DiffOptions controls the improved change detection pipeline used by ComputeDiffV2.
-// Zero values disable optional stages; NormalizeLuma and PreBlurSigma have active defaults
-// that must be set explicitly.
+// Rect is an axis-aligned rectangle in fractions (0..1) of the image size.
+type Rect struct{ X0, Y0, X1, Y1 float64 }
+
+// DiffOptions controls the change detection pipeline used by ComputeDiffV2.
+// Zero values disable optional stages; NormalizeLuma and PreBlurSigma have active
+// defaults that must be set explicitly.
 type DiffOptions struct {
-	Threshold     uint8
-	MorphSize     int     // open kernel side length (1=off)
-	CloseSize     int     // close kernel side length (1=off)
-	MinRegion     int     // minimum connected-component size in pixels (1=off)
-	PreBlurSigma  float64 // Gaussian σ applied to colour images before AbsDiff (0=off)
-	NormalizeLuma bool    // shift per-image mean luma to 128 before diff
+	Threshold      uint8
+	AutoThreshold  bool    // derive the threshold from the noise floor (Threshold acts as a floor offset)
+	MorphSize      int     // open kernel side length (1=off)
+	CloseSize      int     // close kernel side length (1=off)
+	MinRegion      int     // minimum connected-component size in pixels (1=off)
+	PreBlurSigma   float64 // Gaussian σ applied to colour images before differencing (0=off)
+	NormalizeLuma  bool    // shift per-image mean luma to 128 before diff
+	MatchIntensity bool    // per-channel gain/offset fit of before onto after (supersedes NormalizeLuma)
+	LocalLight     float64 // match lighting locally over windows of this fraction of the diagonal (0=off)
+	ColorWeight    float64 // weight of CIELAB a/b distance relative to lightness (0 = luma only)
+	ShiftTol       int     // tolerate ±N px residual misalignment (0=off)
+	BorderPct      float64 // ignore this fraction of each edge (0=off)
+
+	Valid  *image.Gray // pixels where the before image holds real data (nil = all)
+	Spread *image.Gray // per-pixel baseline variability subtracted from the diff (nil = none)
+	Ignore []Rect      // user-drawn exclusion zones
+}
+
+// DiffResult is the output of ComputeDiffV2.
+type DiffResult struct {
+	Diff      *image.Gray // per-pixel change magnitude, 0..255
+	Mask      *image.Gray // thresholded, cleaned change mask
+	Threshold uint8       // threshold actually used (differs from Threshold when auto)
 }
 
 // NormalizeLuma returns a copy of img with each pixel's RGB channels shifted so
@@ -44,17 +64,13 @@ func NormalizeLuma(img *image.NRGBA) *image.NRGBA {
 		for x := 0; x < w; x++ {
 			i := y*img.Stride + x*4
 			o := y*out.Stride + x*4
-			out.Pix[o] = clampUint8(float64(img.Pix[i]) + delta)
-			out.Pix[o+1] = clampUint8(float64(img.Pix[i+1]) + delta)
-			out.Pix[o+2] = clampUint8(float64(img.Pix[i+2]) + delta)
+			out.Pix[o] = clampU8(float64(img.Pix[i]) + delta)
+			out.Pix[o+1] = clampU8(float64(img.Pix[i+1]) + delta)
+			out.Pix[o+2] = clampU8(float64(img.Pix[i+2]) + delta)
 			out.Pix[o+3] = img.Pix[i+3]
 		}
 	}
 	return out
-}
-
-func clampUint8(v float64) uint8 {
-	return uint8(math.Max(0, math.Min(255, math.Round(v))))
 }
 
 // GaussianBlurNRGBA applies a Gaussian blur with radius sigma to an NRGBA image.
@@ -78,14 +94,20 @@ func MorphologicalClose(mask *image.Gray, size int) *image.Gray {
 	return fastBinaryErode(fastBinaryDilate(mask, size), size)
 }
 
-// PrepareImages applies the NormalizeLuma and GaussianBlur preprocessing steps
-// from opts to copies of before and after. Use this when you need preprocessed
-// images without running the full diff pipeline (e.g. for Subtract or Heatmap).
+// PrepareImages applies the intensity-normalization and blur preprocessing
+// steps from opts to copies of before and after. Use this when you need
+// preprocessed images without running the full diff pipeline (e.g. Subtract).
 func PrepareImages(before, after *image.NRGBA, opts DiffOptions) (*image.NRGBA, *image.NRGBA) {
 	b, a := before, after
-	if opts.NormalizeLuma {
+	switch {
+	case opts.MatchIntensity:
+		b = MatchIntensity(b, a, opts.Valid)
+	case opts.NormalizeLuma:
 		b = NormalizeLuma(b)
 		a = NormalizeLuma(a)
+	}
+	if opts.LocalLight > 0 {
+		b = MatchLocalLight(b, a, opts.Valid, opts.LocalLight)
 	}
 	if opts.PreBlurSigma > 0 {
 		b = GaussianBlurNRGBA(b, opts.PreBlurSigma)
@@ -94,26 +116,26 @@ func PrepareImages(before, after *image.NRGBA, opts DiffOptions) (*image.NRGBA, 
 	return b, a
 }
 
-// ComputeDiffV2 runs the improved change detection pipeline using DiffOptions.
+// ComputeDiffV2 runs the change detection pipeline.
 //
-// Pipeline:
+//	[match intensity | normalize luma] → [blur] → Lab diff (shift-tolerant) →
+//	[− baseline spread] → [zero invalid/border/ignored] → threshold (fixed or
+//	auto) → open → close → min region
 //
-//	[NormalizeLuma] → [GaussianBlur] → AbsDiff → BinaryThreshold →
-//	[MorphologicalOpen] → [MorphologicalClose] → [FilterByMinRegionSize]
-//
-// Returns (raw_diff_map, binary_mask). Does not mutate the input images.
-func ComputeDiffV2(before, after *image.NRGBA, opts DiffOptions) (*image.Gray, *image.Gray) {
-	b, a := before, after
-	if opts.NormalizeLuma {
-		b = NormalizeLuma(b)
-		a = NormalizeLuma(a)
+// Does not mutate the input images.
+func ComputeDiffV2(before, after *image.NRGBA, opts DiffOptions) DiffResult {
+	b, a := PrepareImages(before, after, opts)
+	diff := labDiff(toLab(b), toLab(a), opts.ColorWeight, opts.ShiftTol)
+	if opts.Spread != nil {
+		subtractSpread(diff, opts.Spread, 3)
 	}
-	if opts.PreBlurSigma > 0 {
-		b = GaussianBlurNRGBA(b, opts.PreBlurSigma)
-		a = GaussianBlurNRGBA(a, opts.PreBlurSigma)
+	applyExclusions(diff, opts)
+
+	thr := opts.Threshold
+	if opts.AutoThreshold {
+		thr = autoThreshold(diff, opts.Valid, opts.Threshold)
 	}
-	diff := AbsDiff(b, a)
-	thresh := BinaryThreshold(diff, opts.Threshold)
+	thresh := BinaryThreshold(diff, thr)
 	if opts.MorphSize > 1 {
 		thresh = MorphologicalOpen(thresh, opts.MorphSize)
 	}
@@ -123,30 +145,142 @@ func ComputeDiffV2(before, after *image.NRGBA, opts DiffOptions) (*image.Gray, *
 	if opts.MinRegion > 1 {
 		thresh = FilterByMinRegionSize(thresh, opts.MinRegion)
 	}
-	return diff, thresh
+	return DiffResult{Diff: diff, Mask: thresh, Threshold: thr}
 }
 
-
-// AbsDiff computes the absolute per-pixel grayscale difference between two
-// NRGBA images. Uses direct Pix access for speed.
-func AbsDiff(a, b *image.NRGBA) *image.Gray {
-	bounds := a.Bounds()
-	w, h := bounds.Dx(), bounds.Dy()
+// labDiff computes the per-pixel CIELAB distance (scaled so a full lightness
+// swing is 255). colorWeight=0 compares lightness only. With shiftTol>0 each
+// pixel takes the minimum distance over the ±shiftTol neighbourhood of before,
+// which suppresses edge halos caused by sub-pixel/few-pixel misalignment.
+func labDiff(b, a labPlanes, colorWeight float64, shiftTol int) *image.Gray {
+	w, h := a.W, a.H
 	out := image.NewGray(image.Rect(0, 0, w, h))
+	cw := float32(colorWeight)
+	const scale = 2.55
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			ai := y*a.Stride + x*4
-			bi := y*b.Stride + x*4
-			ga := uint8(float64(a.Pix[ai])*0.299 + float64(a.Pix[ai+1])*0.587 + float64(a.Pix[ai+2])*0.114 + 0.5)
-			gb := uint8(float64(b.Pix[bi])*0.299 + float64(b.Pix[bi+1])*0.587 + float64(b.Pix[bi+2])*0.114 + 0.5)
-			if ga > gb {
-				out.Pix[y*out.Stride+x] = ga - gb
-			} else {
-				out.Pix[y*out.Stride+x] = gb - ga
+			ai := y*w + x
+			best := float32(math.MaxFloat32)
+			for dy := -shiftTol; dy <= shiftTol; dy++ {
+				yy := min(max(y+dy, 0), h-1)
+				for dx := -shiftTol; dx <= shiftTol; dx++ {
+					xx := min(max(x+dx, 0), w-1)
+					bi := yy*w + xx
+					dl := b.L[bi] - a.L[ai]
+					d := dl * dl
+					if cw > 0 {
+						da, db := b.A[bi]-a.A[ai], b.B[bi]-a.B[ai]
+						d += cw * (da*da + db*db)
+					}
+					if d < best {
+						best = d
+					}
+				}
 			}
+			v := float32(math.Sqrt(float64(best))) * scale
+			if v > 255 {
+				v = 255
+			}
+			out.Pix[y*out.Stride+x] = uint8(v + 0.5)
 		}
 	}
 	return out
+}
+
+// subtractSpread lowers diff by k× the baseline spread, so pixels that vary
+// naturally between baseline sweeps need a larger change to register.
+func subtractSpread(diff, spread *image.Gray, k float64) {
+	for y := 0; y < diff.Bounds().Dy(); y++ {
+		for x := 0; x < diff.Bounds().Dx(); x++ {
+			d := float64(diff.Pix[y*diff.Stride+x]) - k*float64(spread.Pix[y*spread.Stride+x])
+			if d < 0 {
+				d = 0
+			}
+			diff.Pix[y*diff.Stride+x] = uint8(d)
+		}
+	}
+}
+
+// applyExclusions zeroes diff where the before image has no data (eroded so
+// interpolated warp edges are excluded), near the borders, or inside
+// user-drawn ignore rectangles.
+func applyExclusions(diff *image.Gray, opts DiffOptions) {
+	w, h := diff.Bounds().Dx(), diff.Bounds().Dy()
+	if opts.Valid != nil {
+		inner := fastBinaryErode(opts.Valid, 2*(int(math.Ceil(opts.PreBlurSigma*2))+opts.ShiftTol+1)+1)
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				if inner.Pix[y*inner.Stride+x] == 0 {
+					diff.Pix[y*diff.Stride+x] = 0
+				}
+			}
+		}
+	}
+	zero := func(x0, y0, x1, y1 int) {
+		for y := max(y0, 0); y < min(y1, h); y++ {
+			for x := max(x0, 0); x < min(x1, w); x++ {
+				diff.Pix[y*diff.Stride+x] = 0
+			}
+		}
+	}
+	if opts.BorderPct > 0 {
+		bx, by := int(float64(w)*opts.BorderPct), int(float64(h)*opts.BorderPct)
+		zero(0, 0, w, by)
+		zero(0, h-by, w, h)
+		zero(0, 0, bx, h)
+		zero(w-bx, 0, w, h)
+	}
+	for _, r := range opts.Ignore {
+		zero(int(r.X0*float64(w)), int(r.Y0*float64(h)), int(math.Ceil(r.X1*float64(w))), int(math.Ceil(r.Y1*float64(h))))
+	}
+}
+
+// autoThreshold picks a threshold from the diff's own noise floor:
+// median + (6 + offset/10)·σ, where σ is the robust MAD estimate over valid,
+// non-excluded pixels. offset is the user's strength slider; higher values
+// demand larger changes. The result is clamped to [8, 99].
+func autoThreshold(diff *image.Gray, valid *image.Gray, offset uint8) uint8 {
+	var hist [256]int
+	total := 0
+	for y := 0; y < diff.Bounds().Dy(); y++ {
+		for x := 0; x < diff.Bounds().Dx(); x++ {
+			if valid != nil && valid.Pix[y*valid.Stride+x] == 0 {
+				continue
+			}
+			hist[diff.Pix[y*diff.Stride+x]]++
+			total++
+		}
+	}
+	if total == 0 {
+		return offset
+	}
+	quantile := func(q float64) int {
+		target, acc := int(q*float64(total)), 0
+		for v, n := range hist {
+			acc += n
+			if acc > target {
+				return v
+			}
+		}
+		return 255
+	}
+	med := quantile(0.5)
+	// MAD: median of |v - med|.
+	var devHist [256]int
+	for v, n := range hist {
+		devHist[int(math.Abs(float64(v-med)))] += n
+	}
+	acc, mad := 0, 0
+	for v, n := range devHist {
+		acc += n
+		if acc > total/2 {
+			mad = v
+			break
+		}
+	}
+	sigma := math.Max(1.4826*float64(mad), 1)
+	t := float64(med) + (6+float64(offset)/10)*sigma
+	return uint8(math.Max(8, math.Min(99, t)))
 }
 
 // BinaryThreshold applies a binary threshold to a grayscale image.
@@ -255,77 +389,14 @@ func fastBinaryDilate(src *image.Gray, size int) *image.Gray {
 func FilterByMinRegionSize(mask *image.Gray, minPx int) *image.Gray {
 	b := mask.Bounds()
 	w, h := b.Dx(), b.Dy()
-
-	labels := make([]int, w*h)
-	sizes := []int{0} // index 0 unused; label IDs start at 1
-	visited := make([]bool, w*h)
-	dirs := [4][2]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
-
-	// BFS flood-fill to label each connected component and record its size.
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			idx := y*w + x
-			if visited[idx] || mask.Pix[y*mask.Stride+x] == 0 {
-				continue
-			}
-			label := len(sizes)
-			sizes = append(sizes, 0)
-			queue := [][2]int{{x, y}}
-			visited[idx] = true
-			labels[idx] = label
-			for len(queue) > 0 {
-				p := queue[0]
-				queue = queue[1:]
-				sizes[label]++
-				for _, d := range dirs {
-					nx, ny := p[0]+d[0], p[1]+d[1]
-					if nx < 0 || nx >= w || ny < 0 || ny >= h {
-						continue
-					}
-					nidx := ny*w + nx
-					if visited[nidx] || mask.Pix[ny*mask.Stride+nx] == 0 {
-						continue
-					}
-					visited[nidx] = true
-					labels[nidx] = label
-					queue = append(queue, [2]int{nx, ny})
-				}
-			}
-		}
-	}
-
+	labels, regions := components(mask)
 	out := image.NewGray(b)
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			label := labels[y*w+x]
-			if label > 0 && sizes[label] >= minPx {
+			if l := labels[y*w+x]; l > 0 && regions[l-1].Area >= minPx {
 				out.Pix[y*out.Stride+x] = 255
 			}
 		}
 	}
 	return out
 }
-
-// ComputeDiff runs the full change detection pipeline:
-//
-//	AbsDiff → BinaryThreshold → MorphologicalOpen(morphRadius) → FilterByMinRegionSize(minRegion)
-//
-// morphSize is the side length of the square structuring element used for
-// morphological opening (1=off, 2=2×2, 3=3×3, 5=5×5, …). A pixel must be
-// part of a solid morphSize×morphSize block to survive erosion, which suppresses
-// minor camera-shake artifacts. Set to 1 to skip.
-//
-// minRegion is the minimum connected-component size in pixels. Regions smaller
-// than this are discarded as noise after morphological opening. Set to 1 to skip.
-func ComputeDiff(before, after *image.NRGBA, threshold uint8, morphSize, minRegion int) (*image.Gray, *image.Gray) {
-	diff := AbsDiff(before, after)
-	thresh := BinaryThreshold(diff, threshold)
-	if morphSize > 1 {
-		thresh = MorphologicalOpen(thresh, morphSize)
-	}
-	if minRegion > 1 {
-		thresh = FilterByMinRegionSize(thresh, minRegion)
-	}
-	return diff, thresh
-}
-
