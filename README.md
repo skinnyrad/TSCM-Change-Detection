@@ -161,6 +161,8 @@ Press `←` to show Before and `→` to show After in any mode (flipping by hand
 
 ![Image Comparison tab in Slider mode](./img/compare.png)
 
+![Comparison zoomed to 349% on a mug that moved: Before left of the divider, After right, with the zoom controls bottom-right and the locator bottom-left](./img/zoom.png)
+
 ### Tab 2 — Change Detection
 
 Shows the After image with detected changes highlighted. Each change is drawn as a numbered box, ranked from strongest to weakest, and listed under the image as **Findings**. Click a finding (in the list or on the image) to see zoomed crops of that area. Results update automatically whenever a control changes.
